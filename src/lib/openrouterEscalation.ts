@@ -2,37 +2,46 @@ import { getLocalHeuristicAnalysis } from "@/lib/escalationHeuristics";
 import type { FormattedIssue, TicketCommentContext } from "@/lib/jiraClient";
 import { getTicketCommentContext } from "@/lib/jiraClient";
 
-const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
+const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
 function getPrimaryModel(): string {
-  return process.env.GEMINI_MODEL ?? "gemini-2.5-flash-lite";
+  return process.env.OPENROUTER_MODEL ?? "openai/gpt-oss-120b:free";
 }
 
 function getFallbackModel(): string {
-  return process.env.GEMINI_FALLBACK_MODEL ?? "gemini-2.5-flash";
+  return (
+    process.env.OPENROUTER_FALLBACK_MODEL ??
+    process.env.OPENROUTER_MODEL ??
+    "openai/gpt-oss-120b:free"
+  );
 }
 
-function getGeminiApiKey(): string | undefined {
-  return process.env.GEMINI_API_KEY;
+function getOpenRouterApiKey(): string | undefined {
+  return process.env.OPENROUTER_API_KEY;
 }
 
-function isGeminiEnabled(): boolean {
-  return process.env.GEMINI_ESCALATION_ENABLED === "true";
+function isEscalationEnabled(): boolean {
+  return process.env.OPENROUTER_ESCALATION_ENABLED === "true";
 }
+
+function isReasoningEnabled(): boolean {
+  return process.env.OPENROUTER_REASONING_ENABLED !== "false";
+}
+
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 const MAX_DELAY_MS = 10_000;
 const FALLBACK_COOLDOWN_MS = 500;
 
 function getMaxRetries(): number {
-  return Number.parseInt(process.env.GEMINI_MAX_RETRIES ?? "4", 10);
+  return Number.parseInt(process.env.OPENROUTER_MAX_RETRIES ?? "4", 10);
 }
 
 function getRequestTimeoutMs(): number {
-  return Number.parseInt(process.env.GEMINI_REQUEST_TIMEOUT_MS ?? "30000", 10);
+  return Number.parseInt(process.env.OPENROUTER_REQUEST_TIMEOUT_MS ?? "45000", 10);
 }
 
 function getBaseDelayMs(): number {
-  return Number.parseInt(process.env.GEMINI_BASE_DELAY_MS ?? "500", 10);
+  return Number.parseInt(process.env.OPENROUTER_BASE_DELAY_MS ?? "500", 10);
 }
 
 export type EscalationRiskLevel = "immediate" | "watch" | "normal" | "unknown";
@@ -50,17 +59,18 @@ interface TicketAnalysisInput {
   issue: FormattedIssue;
 }
 
-interface GeminiGenerateResponse {
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{
-        text?: string;
-      }>;
-    };
-  }>;
+interface OpenRouterChoice {
+  message?: {
+    content?: string;
+    reasoning_details?: unknown;
+  };
 }
 
-interface RawGeminiAnalysis {
+interface OpenRouterChatResponse {
+  choices?: OpenRouterChoice[];
+}
+
+interface RawAnalysis {
   key?: unknown;
   next_action?: unknown;
   reason?: unknown;
@@ -107,7 +117,7 @@ function normalizeRiskLevel(value: unknown): EscalationRiskLevel {
 }
 
 function normalizeAnalysis(
-  raw: RawGeminiAnalysis,
+  raw: RawAnalysis,
   fallbackIssue: FormattedIssue,
 ): TicketEscalationAnalysis {
   const riskScore =
@@ -130,14 +140,8 @@ function normalizeAnalysis(
   };
 }
 
-function extractGeminiText(response: GeminiGenerateResponse): string {
-  return (
-    response.candidates
-      ?.flatMap((candidate) => candidate.content?.parts ?? [])
-      .map((part) => part.text ?? "")
-      .join("")
-      .trim() ?? ""
-  );
+function extractContent(response: OpenRouterChatResponse): string {
+  return response.choices?.[0]?.message?.content?.trim() ?? "";
 }
 
 function parseAnalyses(text: string, issues: FormattedIssue[]): TicketEscalationAnalysis[] {
@@ -162,7 +166,7 @@ function parseAnalyses(text: string, issues: FormattedIssue[]): TicketEscalation
 
   const byKey = new Map(
     parsed
-      .filter((item): item is RawGeminiAnalysis => Boolean(item))
+      .filter((item): item is RawAnalysis => Boolean(item))
       .map((item) => [typeof item.key === "string" ? item.key : "", item]),
   );
 
@@ -172,7 +176,7 @@ function parseAnalyses(text: string, issues: FormattedIssue[]): TicketEscalation
 }
 
 function buildPrompt(inputs: TicketAnalysisInput[]): string {
-  return `You are a support escalation triage assistant. Analyze Jira tickets and recent comments. Return only valid JSON array, no markdown. Each object must have: key, risk_level ("immediate" | "watch" | "normal"), risk_score (0-100), reason, next_action.
+  return `You are a support escalation triage assistant. Analyze Jira tickets and recent comments. Return only a valid JSON array, no markdown fences. Each object must have: key, risk_level ("immediate" | "watch" | "normal"), risk_score (0-100), reason, next_action.
 
 Mark "immediate" when the ticket may cause client escalation, SLA urgency, blocker language, repeated client follow-up, production impact, angry/frustrated tone, missed response, or external dependency risk.
 
@@ -196,13 +200,13 @@ ${JSON.stringify(
 )}`;
 }
 
-async function callGemini(
+async function callOpenRouter(
   model: string,
   inputs: TicketAnalysisInput[],
 ): Promise<TicketEscalationAnalysis[] | null> {
-  const apiKey = getGeminiApiKey();
+  const apiKey = getOpenRouterApiKey();
 
-  if (!isGeminiEnabled() || !apiKey) {
+  if (!isEscalationEnabled() || !apiKey) {
     return inputs.map(({ comments, issue }) => getLocalHeuristicAnalysis(issue, comments));
   }
 
@@ -210,35 +214,30 @@ async function callGemini(
 
   for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
     try {
-      const response = await fetch(
-        `${GEMINI_ENDPOINT}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
-        {
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: buildPrompt(inputs),
-                  },
-                ],
-              },
-            ],
-            generationConfig: {
-              responseMimeType: "application/json",
-              temperature: 0.1,
+      const response = await fetch(OPENROUTER_ENDPOINT, {
+        body: JSON.stringify({
+          messages: [
+            {
+              content: buildPrompt(inputs),
+              role: "user",
             },
-          }),
-          headers: {
-            "Content-Type": "application/json",
-          },
-          method: "POST",
-          signal: AbortSignal.timeout(getRequestTimeoutMs()),
+          ],
+          model,
+          reasoning: { enabled: isReasoningEnabled() },
+          response_format: { type: "json_object" },
+          temperature: 0.1,
+        }),
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
-      );
+        method: "POST",
+        signal: AbortSignal.timeout(getRequestTimeoutMs()),
+      });
 
       if (response.ok) {
-        const data = (await response.json()) as GeminiGenerateResponse;
-        const text = extractGeminiText(data);
+        const data = (await response.json()) as OpenRouterChatResponse;
+        const text = extractContent(data);
 
         return parseAnalyses(
           text,
@@ -248,13 +247,13 @@ async function callGemini(
 
       if (!RETRYABLE_STATUSES.has(response.status)) {
         console.warn(
-          `Gemini ${model} returned non-retryable status ${response.status}; aborting.`,
+          `OpenRouter ${model} returned non-retryable status ${response.status}; aborting.`,
         );
         return null;
       }
 
       console.warn(
-        `Gemini ${model} returned ${response.status} (attempt ${attempt}/${maxRetries}).`,
+        `OpenRouter ${model} returned ${response.status} (attempt ${attempt}/${maxRetries}).`,
       );
 
       if (attempt < maxRetries) {
@@ -263,7 +262,7 @@ async function callGemini(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(
-        `Gemini ${model} network error on attempt ${attempt}/${maxRetries}: ${message}`,
+        `OpenRouter ${model} network error on attempt ${attempt}/${maxRetries}: ${message}`,
       );
 
       if (attempt < maxRetries) {
@@ -272,7 +271,7 @@ async function callGemini(
     }
   }
 
-  console.warn(`Gemini ${model} exhausted all ${maxRetries} attempts.`);
+  console.warn(`OpenRouter ${model} exhausted all ${maxRetries} attempts.`);
   return null;
 }
 
@@ -297,24 +296,24 @@ export async function analyzeEscalationRisk(
   );
 
   try {
-    const primary = await callGemini(getPrimaryModel(), inputs);
+    const primary = await callOpenRouter(getPrimaryModel(), inputs);
     if (primary) {
       analysisCache.set(cacheKey, primary);
       return primary;
     }
 
-    console.warn("Primary Gemini escalation analysis unavailable; trying fallback model.");
+    console.warn("Primary OpenRouter escalation analysis unavailable; trying fallback model.");
     await wait(FALLBACK_COOLDOWN_MS);
 
-    const fallbackModel = await callGemini(getFallbackModel(), inputs);
+    const fallbackModel = await callOpenRouter(getFallbackModel(), inputs);
     if (fallbackModel) {
       analysisCache.set(cacheKey, fallbackModel);
       return fallbackModel;
     }
 
-    console.warn("Fallback Gemini escalation analysis unavailable; using local heuristics.");
+    console.warn("Fallback OpenRouter escalation analysis unavailable; using local heuristics.");
   } catch (error) {
-    console.warn("Unexpected error during Gemini escalation analysis; using local heuristics.", error);
+    console.warn("Unexpected error during OpenRouter escalation analysis; using local heuristics.", error);
   }
 
   const fallback = inputs.map(({ comments, issue }) =>

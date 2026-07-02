@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { RefreshCountdown } from "@/components/RefreshCountdown";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TicketCard } from "@/components/TicketCard";
-import { analyzeEscalationRisk } from "@/lib/geminiEscalation";
+import { analyzeEscalationRisk } from "@/lib/openrouterEscalation";
 import { getCategoryCacheMeta, getCategoryIssues } from "@/lib/jiraClient";
 
 export const dynamic = "force-dynamic";

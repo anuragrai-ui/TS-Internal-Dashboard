@@ -1,4 +1,4 @@
-import { analyzeEscalationRisk } from "@/lib/geminiEscalation";
+import { analyzeEscalationRisk } from "@/lib/openrouterEscalation";
 import { getLocalHeuristicAnalysis } from "@/lib/escalationHeuristics";
 import type { FormattedIssue, TicketCommentContext } from "@/lib/jiraClient";
 
@@ -37,6 +37,7 @@ function makeIssues(prefix: string): FormattedIssue[] {
     priority_sort: 3,
     project: "TS",
     reporter: "Product Team",
+    severity: "Minor",
     status: "Waiting for Product",
     subtask_count: 0,
     summary: "Need clarification on feature requirement",
@@ -56,6 +57,7 @@ function makeIssues(prefix: string): FormattedIssue[] {
     priority_sort: 5,
     project: "CP",
     reporter: "Internal",
+    severity: "Trivial",
     status: "Todo",
     subtask_count: 0,
     summary: "Routine documentation update",
@@ -133,10 +135,10 @@ function testHeuristics(): void {
   console.log("PASS: Heuristic risk levels match expectations.");
 }
 
-async function testDisabledGemini(): Promise<void> {
-  console.log("\n--- Test: analyzeEscalationRisk with Gemini disabled ---");
+async function testDisabledOpenRouter(): Promise<void> {
+  console.log("\n--- Test: analyzeEscalationRisk with OpenRouter disabled ---");
 
-  process.env.GEMINI_ESCALATION_ENABLED = "false";
+  process.env.OPENROUTER_ESCALATION_ENABLED = "false";
   const prefix = "DISABLED";
   const issues = makeIssues(prefix);
   const analyses = await analyzeEscalationRisk(issues, 12, makeMockGetComments(prefix));
@@ -148,17 +150,17 @@ async function testDisabledGemini(): Promise<void> {
   assertEqual(disabledC.risk_level, "normal", `${prefix}-103 should be normal`);
   assert(analyses.every((a) => a.key && a.next_action && a.reason), "Every analysis should have required fields");
 
-  console.log("PASS: Disabled Gemini path returns heuristic analyses.");
+  console.log("PASS: Disabled OpenRouter path returns heuristic analyses.");
 }
 
-async function testGemini503Fallback(): Promise<void> {
-  console.log("\n--- Test: Gemini 503 failure falls back to heuristics ---");
+async function testOpenRouter503Fallback(): Promise<void> {
+  console.log("\n--- Test: OpenRouter 503 failure falls back to heuristics ---");
 
-  process.env.GEMINI_ESCALATION_ENABLED = "true";
-  process.env.GEMINI_API_KEY = "fake-key";
-  process.env.GEMINI_MAX_RETRIES = "2";
-  process.env.GEMINI_BASE_DELAY_MS = "50";
-  process.env.GEMINI_REQUEST_TIMEOUT_MS = "1000";
+  process.env.OPENROUTER_ESCALATION_ENABLED = "true";
+  process.env.OPENROUTER_API_KEY = "fake-key";
+  process.env.OPENROUTER_MAX_RETRIES = "2";
+  process.env.OPENROUTER_BASE_DELAY_MS = "50";
+  process.env.OPENROUTER_REQUEST_TIMEOUT_MS = "1000";
 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = () =>
@@ -181,14 +183,14 @@ async function testGemini503Fallback(): Promise<void> {
   }
 }
 
-async function testGeminiSuccess(): Promise<void> {
-  console.log("\n--- Test: Gemini success path parses response ---");
+async function testOpenRouterSuccess(): Promise<void> {
+  console.log("\n--- Test: OpenRouter success path parses response ---");
 
-  process.env.GEMINI_ESCALATION_ENABLED = "true";
-  process.env.GEMINI_API_KEY = "fake-key";
-  process.env.GEMINI_MAX_RETRIES = "2";
-  process.env.GEMINI_BASE_DELAY_MS = "50";
-  process.env.GEMINI_REQUEST_TIMEOUT_MS = "1000";
+  process.env.OPENROUTER_ESCALATION_ENABLED = "true";
+  process.env.OPENROUTER_API_KEY = "fake-key";
+  process.env.OPENROUTER_MAX_RETRIES = "2";
+  process.env.OPENROUTER_BASE_DELAY_MS = "50";
+  process.env.OPENROUTER_REQUEST_TIMEOUT_MS = "1000";
 
   const prefix = "OK";
   const originalFetch = globalThis.fetch;
@@ -197,36 +199,33 @@ async function testGeminiSuccess(): Promise<void> {
     fetchCalled += 1;
     return Promise.resolve(new Response(
       JSON.stringify({
-        candidates: [
+        choices: [
           {
-            content: {
-              parts: [
+            message: {
+              content: JSON.stringify([
                 {
-                  text: JSON.stringify([
-                    {
-                      key: `${prefix}-101`,
-                      next_action: "Escalate to on-call immediately.",
-                      reason: "Production outage reported by client.",
-                      risk_level: "immediate",
-                      risk_score: 95,
-                    },
-                    {
-                      key: `${prefix}-102`,
-                      next_action: "Ping product team for clarification.",
-                      reason: "Waiting for product requirement details.",
-                      risk_level: "watch",
-                      risk_score: 45,
-                    },
-                    {
-                      key: `${prefix}-103`,
-                      next_action: "Handle in normal queue.",
-                      reason: "Low priority routine task.",
-                      risk_level: "normal",
-                      risk_score: 5,
-                    },
-                  ]),
+                  key: `${prefix}-101`,
+                  next_action: "Escalate to on-call immediately.",
+                  reason: "Production outage reported by client.",
+                  risk_level: "immediate",
+                  risk_score: 95,
                 },
-              ],
+                {
+                  key: `${prefix}-102`,
+                  next_action: "Ping product team for clarification.",
+                  reason: "Waiting for product requirement details.",
+                  risk_level: "watch",
+                  risk_score: 45,
+                },
+                {
+                  key: `${prefix}-103`,
+                  next_action: "Handle in normal queue.",
+                  reason: "Low priority routine task.",
+                  risk_level: "normal",
+                  risk_score: 5,
+                },
+              ]),
+              reasoning_details: [],
             },
           },
         ],
@@ -240,7 +239,7 @@ async function testGeminiSuccess(): Promise<void> {
     const issues = makeIssues(prefix);
     const analyses = await analyzeEscalationRisk(issues, 12, makeMockGetComments(prefix));
 
-    assert(fetchCalled > 0, "Gemini API should have been called");
+    assert(fetchCalled > 0, "OpenRouter API should have been called");
     assertEqual(analyses.length, 3, "Should return 3 analyses");
     const [successA, successB, successC] = requireThree(analyses);
     assertEqual(successA.key, `${prefix}-101`, `${prefix}-101 key matches`);
@@ -251,7 +250,7 @@ async function testGeminiSuccess(): Promise<void> {
     assertEqual(successC.risk_level, "normal", `${prefix}-103 should be normal`);
     assertEqual(successC.risk_score, 5, `${prefix}-103 score should be 5`);
 
-    console.log("PASS: Gemini success path parses and returns analyses.");
+    console.log("PASS: OpenRouter success path parses and returns analyses.");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -260,9 +259,9 @@ async function testGeminiSuccess(): Promise<void> {
 async function main(): Promise<void> {
   try {
     testHeuristics();
-    await testDisabledGemini();
-    await testGemini503Fallback();
-    await testGeminiSuccess();
+    await testDisabledOpenRouter();
+    await testOpenRouter503Fallback();
+    await testOpenRouterSuccess();
     console.log("\nAll escalation tests passed.");
     process.exit(0);
   } catch (error) {

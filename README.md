@@ -10,7 +10,7 @@ The UI is inspired by the [Argon Dashboard](https://github.com/creativetimoffici
 - React
 - TypeScript
 - Jira Cloud REST API
-- Gemini API server-side escalation triage
+- OpenRouter API server-side escalation triage (default model `openai/gpt-oss-120b:free`)
 - In-memory server cache
 - Open Sans (via `next/font/google`)
 - CSS custom properties for light/dark theming
@@ -20,7 +20,7 @@ The UI is inspired by the [Argon Dashboard](https://github.com/creativetimoffici
 
 - Node.js 20+
 - Jira Cloud API token
-- Gemini API key
+- OpenRouter API key
 
 ## Environment
 
@@ -31,17 +31,18 @@ JIRA_BASE_URL=https://certifyos.atlassian.net
 JIRA_EMAIL=your.email@example.com
 JIRA_API_TOKEN=your-jira-api-token
 JIRA_PROJECT_KEY=TS
-GEMINI_API_KEY=your-gemini-api-key
-GEMINI_ESCALATION_ENABLED=false
-GEMINI_MODEL=gemini-2.5-flash-lite
-GEMINI_FALLBACK_MODEL=gemini-2.5-flash
-# Optional tuning for Gemini retries/timeouts
-GEMINI_MAX_RETRIES=4
-GEMINI_REQUEST_TIMEOUT_MS=30000
-GEMINI_BASE_DELAY_MS=500
+OPENROUTER_API_KEY=your-openrouter-api-key
+OPENROUTER_ESCALATION_ENABLED=false
+OPENROUTER_MODEL=openai/gpt-oss-120b:free
+OPENROUTER_FALLBACK_MODEL=openai/gpt-oss-120b:free
+OPENROUTER_REASONING_ENABLED=true
+# Optional tuning for OpenRouter retries/timeouts
+OPENROUTER_MAX_RETRIES=4
+OPENROUTER_REQUEST_TIMEOUT_MS=45000
+OPENROUTER_BASE_DELAY_MS=500
 ```
 
-`.env` is ignored by git. Do not commit Jira or Gemini credentials.
+`.env` is ignored by git. Do not commit Jira or OpenRouter credentials.
 
 ## Install
 
@@ -99,7 +100,7 @@ src/
   components/ThemeToggle.tsx     Light/dark theme toggle (system-aware + persisted)
   components/TicketCard.tsx      Interactive ticket card with extra Jira fields
   lib/cache.ts                   In-memory cache
-  lib/geminiEscalation.ts        Server-side Gemini escalation triage
+  lib/openrouterEscalation.ts   Server-side OpenRouter escalation triage
   lib/jiraClient.ts              Jira API and ticket category logic
   lib/jiraSnapshotStore.ts       24-hour JSON snapshot persistence
   lib/jiraRefreshScheduler.ts    Scheduled snapshot rotation
@@ -111,11 +112,13 @@ scripts/
 
 ## AI Escalation Triage
 
-Category pages can run a server-side Gemini analysis over the ticket and recent comments. Set `GEMINI_ESCALATION_ENABLED=true` to enable this external analysis. The primary model is `gemini-2.5-flash-lite`; if that request fails, the app falls back to `gemini-2.5-flash`.
+Category pages can run a server-side OpenRouter analysis over the ticket and recent comments. Set `OPENROUTER_ESCALATION_ENABLED=true` to enable this external analysis. The default model is `openai/gpt-oss-120b:free`; if that request fails, the app falls back to `OPENROUTER_FALLBACK_MODEL` (defaults to the same model).
 
-If Gemini returns a retryable error (such as 503) or times out, the request is retried with exponential backoff and jitter. If both models fail, the app silently falls back to a local heuristic analysis so the category page still renders without throwing unhandled errors. Tune retry behavior with `GEMINI_MAX_RETRIES`, `GEMINI_REQUEST_TIMEOUT_MS`, and `GEMINI_BASE_DELAY_MS`.
+If OpenRouter returns a retryable error (such as 429 rate-limiting or 503) or times out, the request is retried with exponential backoff and jitter. If both models fail, the app silently falls back to a local heuristic analysis so the category page still renders without throwing unhandled errors. Tune retry behavior with `OPENROUTER_MAX_RETRIES`, `OPENROUTER_REQUEST_TIMEOUT_MS`, and `OPENROUTER_BASE_DELAY_MS`.
 
-The browser never receives the Gemini API key, Jira API token, or model prompt. It receives only the sanitized result for each assessed ticket:
+Reasoning/thinking tokens are enabled by default (`OPENROUTER_REASONING_ENABLED=true`) for models that support them.
+
+The browser never receives the OpenRouter API key, Jira API token, or model prompt. It receives only the sanitized result for each assessed ticket:
 
 - risk level
 - risk score
@@ -169,7 +172,7 @@ Light and dark modes are supported through CSS `color-scheme` and a persisted ma
 - Comment, attachment, and subtask counts
 - Labels and components
 - Truncated description
-- AI escalation insight (when Gemini is enabled)
+- AI escalation insight (when OpenRouter is enabled)
 
 ## Graphify Project Graph
 

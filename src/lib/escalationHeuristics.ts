@@ -1,4 +1,4 @@
-import type { TicketEscalationAnalysis } from "@/lib/geminiEscalation";
+import type { TicketEscalationAnalysis } from "@/lib/openrouterEscalation";
 import type { FormattedIssue, TicketCommentContext } from "@/lib/jiraClient";
 
 export function getLocalHeuristicAnalysis(

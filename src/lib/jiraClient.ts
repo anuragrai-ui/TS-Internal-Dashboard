@@ -1,4 +1,5 @@
 import { getCache, getCacheMeta, setCache } from "@/lib/cache";
+import { saveCategorySnapshot } from "@/lib/jiraSnapshotStore";
 
 const JIRA_BASE_URL = process.env.JIRA_BASE_URL;
 const JIRA_EMAIL = process.env.JIRA_EMAIL;
@@ -15,14 +16,41 @@ interface JiraNamedField {
   name?: string;
 }
 
+interface JiraOption {
+  value?: string;
+}
+
 interface JiraIssueFields {
   assignee?: JiraAccount | null;
+  attachment?: unknown[];
+  comment?: { comments?: unknown[] };
+  components?: Array<{ name?: string }>;
+  created?: string;
+  description?: string;
+  duedate?: string;
+  issuetype?: JiraNamedField | null;
+  labels?: string[];
   priority?: JiraNamedField | null;
   project?: JiraNamedField | null;
   reporter?: JiraAccount | null;
   status?: JiraNamedField | null;
+  subtasks?: unknown[];
   summary?: string;
   updated?: string;
+
+  /* Custom fields from all_filed.json */
+  customfield_10054?: JiraOption | null; /* Source */
+  customfield_1182?: JiraOption | null; /* Team */
+  customfield_1209?: JiraOption | null; /* Urgency Levels */
+  customfield_1265?: JiraOption | null; /* Pending reason */
+  customfield_1306?: JiraOption | null; /* Pod */
+  customfield_1326?: JiraOption | null; /* Client Support Task Type */
+  customfield_1346?: JiraOption | null; /* Support Category */
+  customfield_1386?: JiraOption | null; /* Client Support Escalation Field */
+  customfield_1453?: JiraOption | null; /* Major incident */
+  customfield_1600?: JiraOption | null; /* Severity */
+  customfield_1665?: unknown; /* Affected services */
+  customfield_1731?: JiraOption | null; /* Progress */
 }
 
 interface JiraIssue {
@@ -34,6 +62,12 @@ interface JiraComment {
   author?: JiraAccount;
   body?: unknown;
   created?: string;
+}
+
+export interface TicketCommentContext {
+  author: string;
+  body: string;
+  created: string;
 }
 
 export interface CurrentUser {
@@ -51,17 +85,38 @@ export interface DashboardTile {
 
 export interface FormattedIssue {
   action_date?: string;
+  affected_services?: string;
   assignee: string;
+  attachment_count: number;
+  client_support_task_type?: string;
+  comment_count: number;
+  components: string[];
+  created?: string;
+  description?: string;
+  duedate?: string;
+  escalation_field?: string;
+  issue_type?: string;
   key: string;
+  labels: string[];
   latest_comment_created: string;
+  major_incident?: string;
+  pending_reason?: string;
   priority: string;
   priority_sort: number;
+  progress?: string;
   project?: string;
   reporter: string;
+  severity?: string;
+  source?: string;
   status?: string;
+  subtask_count: number;
   summary?: string;
+  support_category?: string;
+  team?: string;
   updated?: string;
+  urgency?: string;
   url: string;
+  pod?: string;
 }
 
 export interface Category {
@@ -147,9 +202,40 @@ export async function getCurrentUser(): Promise<CurrentUser> {
   };
 }
 
+const JIRA_FIELDS = [
+  "summary",
+  "description",
+  "status",
+  "priority",
+  "assignee",
+  "reporter",
+  "created",
+  "updated",
+  "duedate",
+  "issuetype",
+  "labels",
+  "components",
+  "comment",
+  "attachment",
+  "subtasks",
+  "project",
+  "customfield_10054",
+  "customfield_1182",
+  "customfield_1209",
+  "customfield_1265",
+  "customfield_1306",
+  "customfield_1326",
+  "customfield_1346",
+  "customfield_1386",
+  "customfield_1453",
+  "customfield_1600",
+  "customfield_1665",
+  "customfield_1731",
+].join(",");
+
 async function searchIssues(jql: string, maxResults = 100): Promise<JiraIssue[]> {
   const data = await jiraGet<{ issues?: JiraIssue[] }>("/search/jql", {
-    fields: "summary,status,assignee,reporter,priority,updated,project",
+    fields: JIRA_FIELDS,
     jql,
     maxResults,
   });
@@ -164,6 +250,21 @@ async function getIssueComments(issueKey: string): Promise<JiraComment[]> {
   );
 
   return data.comments ?? [];
+}
+
+export async function getTicketCommentContext(
+  issueKey: string,
+): Promise<TicketCommentContext[]> {
+  const comments = await getIssueComments(issueKey);
+
+  return comments.slice(-5).map((comment) => ({
+    author: comment.author?.displayName ?? "Unknown",
+    body:
+      typeof comment.body === "string"
+        ? comment.body
+        : JSON.stringify(comment.body ?? ""),
+    created: comment.created ?? "",
+  }));
 }
 
 async function latestCommentIsFromReporter(
@@ -211,6 +312,27 @@ async function latestCommentMentionsReporter(
   return [Boolean(reporter.accountId && body.includes(reporter.accountId)), latestComment];
 }
 
+function getOptionValue(option: JiraOption | null | undefined): string | undefined {
+  return option?.value;
+}
+
+function formatArrayField(items: Array<{ name?: string }> | undefined): string[] {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+  return items.map((item) => item.name ?? "").filter(Boolean);
+}
+
+function truncateText(text: unknown, maxLength = 240): string | undefined {
+  if (typeof text !== "string" || text.length === 0) {
+    return undefined;
+  }
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return `${text.slice(0, maxLength).trim()}…`;
+}
+
 function formatIssue(
   issue: JiraIssue,
   latestComment: JiraComment | null = null,
@@ -229,17 +351,38 @@ function formatIssue(
 
   return {
     action_date: latestComment?.created ?? fields.updated,
+    affected_services: getOptionValue(fields.customfield_1665 as JiraOption | undefined),
     assignee: fields.assignee?.displayName ?? "Unassigned",
+    attachment_count: fields.attachment?.length ?? 0,
+    client_support_task_type: getOptionValue(fields.customfield_1326),
+    comment_count: fields.comment?.comments?.length ?? 0,
+    components: formatArrayField(fields.components),
+    created: fields.created,
+    description: truncateText(fields.description),
+    duedate: fields.duedate,
+    escalation_field: getOptionValue(fields.customfield_1386),
+    issue_type: fields.issuetype?.name,
     key: issue.key,
+    labels: fields.labels ?? [],
     latest_comment_created: latestComment?.created ?? "",
+    major_incident: getOptionValue(fields.customfield_1453),
+    pending_reason: getOptionValue(fields.customfield_1265),
     priority,
     priority_sort: priorityRank[priority] ?? 99,
+    progress: getOptionValue(fields.customfield_1731),
     project: fields.project?.key,
     reporter: fields.reporter?.displayName ?? "",
+    severity: getOptionValue(fields.customfield_1600),
+    source: getOptionValue(fields.customfield_10054),
     status: fields.status?.name,
+    subtask_count: fields.subtasks?.length ?? 0,
     summary: fields.summary,
+    support_category: getOptionValue(fields.customfield_1346),
+    team: getOptionValue(fields.customfield_1182),
     updated: fields.updated,
+    urgency: getOptionValue(fields.customfield_1209),
     url: `${baseUrl}/browse/${issue.key}`,
+    pod: getOptionValue(fields.customfield_1306),
   };
 }
 
@@ -393,8 +536,21 @@ export async function getCategoryIssues(
 
   const issues = await category.loader();
   setCache(cacheKey, issues);
+  await saveCategorySnapshot(categoryKey, category, issues);
 
   return [category, issues];
+}
+
+export async function refreshAllCategories(): Promise<void> {
+  for (const categoryKey of Object.keys(CATEGORIES)) {
+    const category = CATEGORIES[categoryKey];
+
+    if (category) {
+      const issues = await category.loader();
+      setCache(`category:${categoryKey}`, issues);
+      await saveCategorySnapshot(categoryKey, category, issues);
+    }
+  }
 }
 
 export function getCategoryCacheMeta(categoryKey: string): CategoryCacheMeta {

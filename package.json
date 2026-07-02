@@ -8,7 +8,9 @@
     "dev": "next dev -H 127.0.0.1 -p 8000",
     "lint": "eslint .",
     "start": "next start -H 127.0.0.1 -p 8000",
-    "typecheck": "tsc --noEmit"
+    "test:escalation": "npx tsx scripts/test-escalation.ts",
+    "test:theme": "npx tsx scripts/test-theme.ts",
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "next": "^16.2.10",

@@ -2,19 +2,25 @@
 
 A Next.js TypeScript dashboard for Jira tickets assigned to the current user. It shows high-level ticket tiles on the home page and category-specific ticket lists for actionable, waiting-for-product, waiting-for-client, and waiting-for-operations work.
 
+The UI is inspired by the [Argon Dashboard](https://github.com/creativetimofficial/argon-dashboard-tailwind) design: a sticky top navigation, gradient hero banner, rounded stat cards, and soft shadows. It also displays more Jira fields from `all_filed.json` on ticket cards (severity, support category, task type, urgency, source, team, due date, comments, attachments, subtasks, and labels).
+
 ## Tech Stack
 
 - Next.js app router
 - React
 - TypeScript
 - Jira Cloud REST API
+- Gemini API server-side escalation triage
 - In-memory server cache
+- Open Sans (via `next/font/google`)
+- CSS custom properties for light/dark theming
 - Graphify Labs project graph
 
 ## Requirements
 
 - Node.js 20+
 - Jira Cloud API token
+- Gemini API key
 
 ## Environment
 
@@ -25,9 +31,17 @@ JIRA_BASE_URL=https://certifyos.atlassian.net
 JIRA_EMAIL=your.email@example.com
 JIRA_API_TOKEN=your-jira-api-token
 JIRA_PROJECT_KEY=TS
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_ESCALATION_ENABLED=false
+GEMINI_MODEL=gemini-2.5-flash-lite
+GEMINI_FALLBACK_MODEL=gemini-2.5-flash
+# Optional tuning for Gemini retries/timeouts
+GEMINI_MAX_RETRIES=4
+GEMINI_REQUEST_TIMEOUT_MS=30000
+GEMINI_BASE_DELAY_MS=500
 ```
 
-`.env` is ignored by git. Do not commit Jira credentials.
+`.env` is ignored by git. Do not commit Jira or Gemini credentials.
 
 ## Install
 
@@ -54,12 +68,15 @@ npm run typecheck
 npm run lint
 npm run build
 npm start
+npm run test:escalation
+npm run test:theme
 ```
 
 ## Routes
 
 - `/` - dashboard tiles
 - `/category/[categoryKey]` - ticket list for one category
+- `/history` - previous refresh data retained for the last 24 hours
 - `/refresh` - clears the in-memory cache and redirects to the dashboard
 - `/health` - health check
 - `/api/health` - API health check
@@ -68,18 +85,91 @@ npm start
 
 ```text
 app/
-  page.tsx                       Dashboard page
-  category/[categoryKey]/page.tsx Category detail page
+  page.tsx                       Dashboard page (Argon-style hero + stats + tiles)
+  category/[categoryKey]/page.tsx Category detail page with risk summary stats
+  history/page.tsx               Previous refresh data page
   refresh/route.ts               Cache refresh route
   health/route.ts                Health route
   api/health/route.ts            API health route
-  globals.css                    Global styles
+  globals.css                    Global design tokens & Argon-style components
+  layout.tsx                     Root layout with theme init script
 
 src/
   components/RefreshCountdown.tsx Client-side refresh countdown
+  components/ThemeToggle.tsx     Light/dark theme toggle (system-aware + persisted)
+  components/TicketCard.tsx      Interactive ticket card with extra Jira fields
   lib/cache.ts                   In-memory cache
+  lib/geminiEscalation.ts        Server-side Gemini escalation triage
   lib/jiraClient.ts              Jira API and ticket category logic
+  lib/jiraSnapshotStore.ts       24-hour JSON snapshot persistence
+  lib/jiraRefreshScheduler.ts    Scheduled snapshot rotation
+
+scripts/
+  test-escalation.ts            Escalation/heuristic unit tests
+  test-theme.ts                 Theme CSS token tests
 ```
+
+## AI Escalation Triage
+
+Category pages can run a server-side Gemini analysis over the ticket and recent comments. Set `GEMINI_ESCALATION_ENABLED=true` to enable this external analysis. The primary model is `gemini-2.5-flash-lite`; if that request fails, the app falls back to `gemini-2.5-flash`.
+
+If Gemini returns a retryable error (such as 503) or times out, the request is retried with exponential backoff and jitter. If both models fail, the app silently falls back to a local heuristic analysis so the category page still renders without throwing unhandled errors. Tune retry behavior with `GEMINI_MAX_RETRIES`, `GEMINI_REQUEST_TIMEOUT_MS`, and `GEMINI_BASE_DELAY_MS`.
+
+The browser never receives the Gemini API key, Jira API token, or model prompt. It receives only the sanitized result for each assessed ticket:
+
+- risk level
+- risk score
+- reason
+- next action
+
+## Jira Snapshot History
+
+Every new Jira category refresh writes the fetched rows to:
+
+```text
+data/jira-refresh-history.json
+```
+
+The file is a JSON table-style structure with:
+
+- `last_cleared_at`
+- `retention_hours`
+- `rows`
+
+Each row includes the formatted ticket fields plus:
+
+- `category_key`
+- `category_title`
+- `fetched_at`
+
+Only the last 24 hours of rows are retained. A server-side scheduler starts with the Next.js process and checks hourly. When 24 hours have passed since the last clear, it clears the JSON snapshot, clears the in-memory cache, and refreshes all Jira categories again. The scheduled clear/refresh is skipped on Sundays.
+
+`data/` is ignored by git because it contains live Jira ticket data.
+
+## UI Design & Theming
+
+The interface follows the [Argon Dashboard](https://github.com/creativetimofficial/argon-dashboard-tailwind) visual language:
+
+- Sticky top navigation bar with a branded mark
+- Gradient hero banner on every page
+- Rounded stat cards with colored icons
+- Soft-shadow cards and tables
+- Accessible focus-visible states
+- Skip link for keyboard users
+
+Light and dark modes are supported through CSS `color-scheme` and a persisted manual toggle. The selected theme is applied before first paint via an inline script in `app/layout.tsx`, so there is no flash of unstyled content. The toggle also reacts to system preference changes when the user has not made an explicit choice.
+
+## Ticket Fields Displayed
+
+`src/lib/jiraClient.ts` now fetches a wider set of Jira fields from `all_filed.json`. `TicketCard` displays the most useful ones:
+
+- Project, issue type, status, priority, severity
+- Support category, client support task type, urgency
+- Source, team, due date
+- Comment, attachment, and subtask counts
+- Labels and components
+- Truncated description
+- AI escalation insight (when Gemini is enabled)
 
 ## Graphify Project Graph
 
@@ -93,10 +183,9 @@ Generated artifacts:
 
 Current graph summary:
 
-- 14 code files
-- 106 nodes
-- 130 edges
-- 12 communities
+- 175 nodes
+- 272 edges
+- 15 communities
 - No import cycles detected
 
 Main Graphify findings:
@@ -122,11 +211,13 @@ If `graphify` is not on your shell path, use the installed binary directly:
 
 ## Verification
 
-The current Next.js conversion was verified with:
+Run the full verification pipeline after any changes:
 
 ```bash
 npm run typecheck
 npm run lint
+npm run test:escalation
+npm run test:theme
 npm run build
-curl http://127.0.0.1:8000/health
+npm start
 ```

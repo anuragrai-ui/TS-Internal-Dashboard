@@ -1,0 +1,261 @@
+{
+  "communities": {
+    "0": [
+      "tsconfig",
+      "tsconfig_compileroptions",
+      "tsconfig_compileroptions_allowjs",
+      "tsconfig_compileroptions_allowsyntheticdefaultimports",
+      "tsconfig_compileroptions_baseurl",
+      "tsconfig_compileroptions_esmoduleinterop",
+      "tsconfig_compileroptions_forceconsistentcasinginfilenames",
+      "tsconfig_compileroptions_incremental",
+      "tsconfig_compileroptions_isolatedmodules",
+      "tsconfig_compileroptions_jsx",
+      "tsconfig_compileroptions_lib",
+      "tsconfig_compileroptions_module",
+      "tsconfig_compileroptions_moduleresolution",
+      "tsconfig_compileroptions_noemit",
+      "tsconfig_compileroptions_nouncheckedindexedaccess",
+      "tsconfig_compileroptions_paths",
+      "tsconfig_compileroptions_plugins",
+      "tsconfig_compileroptions_resolvejsonmodule",
+      "tsconfig_compileroptions_skiplibcheck",
+      "tsconfig_compileroptions_strict",
+      "tsconfig_compileroptions_target",
+      "tsconfig_exclude",
+      "tsconfig_include",
+      "tsconfig_paths"
+    ],
+    "1": [
+      "src_lib_jiraclient",
+      "src_lib_jiraclient_categories",
+      "src_lib_jiraclient_category",
+      "src_lib_jiraclient_categorycachemeta",
+      "src_lib_jiraclient_currentuser",
+      "src_lib_jiraclient_dashboardtile",
+      "src_lib_jiraclient_formatissue",
+      "src_lib_jiraclient_formattedissue",
+      "src_lib_jiraclient_getactionableitems",
+      "src_lib_jiraclient_getissuecomments",
+      "src_lib_jiraclient_getwaitingforclienttickets",
+      "src_lib_jiraclient_getwaitingforoperationstickets",
+      "src_lib_jiraclient_getwaitingforproducttickets",
+      "src_lib_jiraclient_jiraaccount",
+      "src_lib_jiraclient_jiracomment",
+      "src_lib_jiraclient_jiraget",
+      "src_lib_jiraclient_jiraissue",
+      "src_lib_jiraclient_jiraissuefields",
+      "src_lib_jiraclient_jiranamedfield",
+      "src_lib_jiraclient_latestcommentisfromreporter",
+      "src_lib_jiraclient_latestcommentmentionsreporter",
+      "src_lib_jiraclient_requirejiraconfig",
+      "src_lib_jiraclient_searchissues"
+    ],
+    "2": [
+      "package",
+      "package_dependencies",
+      "package_dependencies_next",
+      "package_dependencies_react",
+      "package_dependencies_react_dom",
+      "package_devdependencies",
+      "package_devdependencies_eslint",
+      "package_devdependencies_eslint_js",
+      "package_devdependencies_types_node",
+      "package_devdependencies_types_react",
+      "package_devdependencies_types_react_dom",
+      "package_devdependencies_typescript",
+      "package_devdependencies_typescript_eslint",
+      "package_engines",
+      "package_engines_node",
+      "package_name",
+      "package_private",
+      "package_type",
+      "package_version"
+    ],
+    "3": [
+      "app_category_categorykey_page",
+      "app_category_categorykey_page_categorypage",
+      "app_category_categorykey_page_categorypageprops",
+      "app_page",
+      "app_page_dashboardpage",
+      "src_components_refreshcountdown",
+      "src_components_refreshcountdown_formatremainingseconds",
+      "src_components_refreshcountdown_refreshcountdown",
+      "src_components_refreshcountdown_refreshcountdownprops",
+      "src_lib_jiraclient_formatdatetime",
+      "src_lib_jiraclient_getcategorycachemeta",
+      "src_lib_jiraclient_getcategoryissues",
+      "src_lib_jiraclient_getcurrentuser",
+      "src_lib_jiraclient_getdashboardtiles"
+    ],
+    "4": [
+      "app_refresh_route",
+      "app_refresh_route_get",
+      "src_lib_cache",
+      "src_lib_cache_cache",
+      "src_lib_cache_cacheentry",
+      "src_lib_cache_clearcache",
+      "src_lib_cache_getcache",
+      "src_lib_cache_getcachemeta",
+      "src_lib_cache_setcache"
+    ],
+    "5": [
+      "package_scripts",
+      "package_scripts_build",
+      "package_scripts_dev",
+      "package_scripts_lint",
+      "package_scripts_start",
+      "package_scripts_typecheck"
+    ],
+    "6": [
+      "app_layout",
+      "app_layout_metadata",
+      "app_layout_rootlayout"
+    ],
+    "7": [
+      "app_api_health_route",
+      "app_api_health_route_get"
+    ],
+    "8": [
+      "app_health_route",
+      "app_health_route_get"
+    ],
+    "9": [
+      "next_config",
+      "next_config_nextconfig"
+    ],
+    "10": [
+      "eslint_config"
+    ],
+    "11": [
+      "next_env_d"
+    ]
+  },
+  "cohesion": {
+    "0": 0.08333333333333333,
+    "1": 0.12648221343873517,
+    "2": 0.10526315789473684,
+    "3": 0.24175824175824176,
+    "4": 0.2777777777777778,
+    "5": 0.3333333333333333,
+    "6": 0.6666666666666666,
+    "7": 1.0,
+    "8": 1.0,
+    "9": 1.0,
+    "10": 1.0,
+    "11": 1.0
+  },
+  "gods": [
+    {
+      "id": "tsconfig_compileroptions",
+      "label": "compilerOptions",
+      "degree": 20
+    },
+    {
+      "id": "src_lib_jiraclient_getcategorycachemeta",
+      "label": "getCategoryCacheMeta()",
+      "degree": 7
+    },
+    {
+      "id": "package_scripts",
+      "label": "scripts",
+      "degree": 6
+    },
+    {
+      "id": "src_lib_jiraclient_getcategoryissues",
+      "label": "getCategoryIssues()",
+      "degree": 6
+    },
+    {
+      "id": "src_lib_jiraclient_searchissues",
+      "label": "searchIssues()",
+      "degree": 5
+    },
+    {
+      "id": "src_lib_jiraclient_getactionableitems",
+      "label": "getActionableItems()",
+      "degree": 5
+    },
+    {
+      "id": "app_page_dashboardpage",
+      "label": "DashboardPage()",
+      "degree": 4
+    },
+    {
+      "id": "src_lib_jiraclient_getdashboardtiles",
+      "label": "getDashboardTiles()",
+      "degree": 4
+    },
+    {
+      "id": "app_category_categorykey_page_categorypage",
+      "label": "CategoryPage()",
+      "degree": 3
+    },
+    {
+      "id": "src_components_refreshcountdown_refreshcountdown",
+      "label": "RefreshCountdown()",
+      "degree": 3
+    }
+  ],
+  "surprises": [
+    {
+      "source": "CategoryPage()",
+      "target": "getCategoryCacheMeta()",
+      "source_files": [
+        "app/category/[categoryKey]/page.tsx",
+        "src/lib/jiraClient.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "connects across different repos/directories"
+    },
+    {
+      "source": "CategoryPage()",
+      "target": "getCategoryIssues()",
+      "source_files": [
+        "app/category/[categoryKey]/page.tsx",
+        "src/lib/jiraClient.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "connects across different repos/directories"
+    },
+    {
+      "source": "DashboardPage()",
+      "target": "getCategoryCacheMeta()",
+      "source_files": [
+        "app/page.tsx",
+        "src/lib/jiraClient.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "connects across different repos/directories"
+    },
+    {
+      "source": "DashboardPage()",
+      "target": "getCurrentUser()",
+      "source_files": [
+        "app/page.tsx",
+        "src/lib/jiraClient.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "connects across different repos/directories"
+    },
+    {
+      "source": "DashboardPage()",
+      "target": "getDashboardTiles()",
+      "source_files": [
+        "app/page.tsx",
+        "src/lib/jiraClient.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "connects across different repos/directories"
+    }
+  ],
+  "tokens": {
+    "input": 0,
+    "output": 0
+  }
+}

@@ -184,19 +184,22 @@ Generated artifacts:
 - [`graphify-out/graph.json`](graphify-out/graph.json)
 - [`graphify-out/graph.html`](graphify-out/graph.html)
 
-Current graph summary:
+Current graph summary (built from commit `cb7faead`):
 
-- 175 nodes
-- 272 edges
-- 15 communities
+- 235 nodes
+- 402 edges
+- 17 communities
+- 98% EXTRACTED / 2% INFERRED
 - No import cycles detected
 
 Main Graphify findings:
 
-- `DashboardPage()` calls `getDashboardTiles()`, `getCurrentUser()`, and `getCategoryCacheMeta()`.
-- `CategoryPage()` calls `getCategoryIssues()` and `getCategoryCacheMeta()`.
+- `DashboardPage()` calls `getDashboardTiles()`, `getCurrentUser()`, `getCategoryCacheMeta()`, and `getJiraSnapshotSummary()`.
+- `CategoryPage()` calls `getCategoryIssues()`, `getCategoryCacheMeta()`, and `analyzeEscalationRisk()`.
 - `getCategoryIssues()` uses `getCache()` and `setCache()` to cache Jira category results.
-- Core graph hubs include `getCategoryCacheMeta()`, `getCategoryIssues()`, `searchIssues()`, `getActionableItems()`, `DashboardPage()`, and `RefreshCountdown()`.
+- `register()` in `instrumentation.ts` starts `startJiraRefreshScheduler()`.
+- Core graph hubs are `callOpenRouter()` (15 edges), `analyzeEscalationRisk()` (14 edges), and `FormattedIssue` (9 edges) — escalation triage is the most connected subsystem.
+- `FormattedIssue` is the main cross-community bridge (betweenness 0.023), linking `jiraClient.ts`, `openrouterEscalation.ts`, `TicketCard.tsx`, and the test scripts.
 
 To refresh the graph after code changes:
 

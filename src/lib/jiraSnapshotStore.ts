@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { Category, FormattedIssue } from "@/lib/jiraClient";
@@ -6,6 +7,7 @@ import type { Category, FormattedIssue } from "@/lib/jiraClient";
 const SNAPSHOT_DIR = path.join(process.cwd(), "data");
 const SNAPSHOT_FILE = path.join(SNAPSHOT_DIR, "jira-refresh-history.json");
 const RETENTION_MS = 24 * 60 * 60 * 1000;
+let snapshotMutationQueue = Promise.resolve();
 
 export interface JiraSnapshotRow extends FormattedIssue {
   category_key: string;
@@ -48,7 +50,7 @@ function isSnapshotFile(value: unknown): value is JiraSnapshotFile {
   );
 }
 
-async function readSnapshotFile(): Promise<JiraSnapshotFile> {
+async function readSnapshotFileIfExists(): Promise<JiraSnapshotFile | null> {
   try {
     const raw = await readFile(SNAPSHOT_FILE, "utf8");
     const parsed: unknown = JSON.parse(raw);
@@ -62,12 +64,36 @@ async function readSnapshotFile(): Promise<JiraSnapshotFile> {
     }
   }
 
-  return createEmptySnapshotFile();
+  return null;
+}
+
+async function readSnapshotFile(): Promise<JiraSnapshotFile> {
+  return (await readSnapshotFileIfExists()) ?? createEmptySnapshotFile();
 }
 
 async function writeSnapshotFile(snapshot: JiraSnapshotFile): Promise<void> {
   await mkdir(SNAPSHOT_DIR, { recursive: true });
-  await writeFile(SNAPSHOT_FILE, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
+  const temporaryFile = `${SNAPSHOT_FILE}.${process.pid}.${randomUUID()}.tmp`;
+
+  try {
+    await writeFile(
+      temporaryFile,
+      `${JSON.stringify(snapshot, null, 2)}\n`,
+      "utf8",
+    );
+    await rename(temporaryFile, SNAPSHOT_FILE);
+  } finally {
+    await rm(temporaryFile, { force: true });
+  }
+}
+
+function serializeSnapshotMutation(
+  mutation: () => Promise<void>,
+): Promise<void> {
+  const result = snapshotMutationQueue.then(mutation);
+
+  snapshotMutationQueue = result.catch(() => undefined);
+  return result;
 }
 
 function removeExpiredRows(
@@ -87,40 +113,46 @@ export async function saveCategorySnapshot(
   category: Category,
   issues: FormattedIssue[],
 ): Promise<void> {
-  const now = new Date();
-  const snapshot = await readSnapshotFile();
-  const rows = removeExpiredRows(snapshot.rows, now);
-  const fetchedAt = now.toISOString();
+  await serializeSnapshotMutation(async () => {
+    const now = new Date();
+    const snapshot = await readSnapshotFile();
+    const rows = removeExpiredRows(snapshot.rows, now);
+    const fetchedAt = now.toISOString();
 
-  rows.push(
-    ...issues.map((issue) => ({
-      ...issue,
-      category_key: categoryKey,
-      category_title: category.title,
-      fetched_at: fetchedAt,
-    })),
-  );
+    rows.push(
+      ...issues.map((issue) => ({
+        ...issue,
+        category_key: categoryKey,
+        category_title: category.title,
+        fetched_at: fetchedAt,
+      })),
+    );
 
-  await writeSnapshotFile({
-    ...snapshot,
-    rows,
-  });
-}
-
-export async function clearJiraSnapshots(now = new Date()): Promise<void> {
-  await writeSnapshotFile(createEmptySnapshotFile(now));
-}
-
-export async function pruneJiraSnapshots(now = new Date()): Promise<void> {
-  const snapshot = await readSnapshotFile();
-  const rows = removeExpiredRows(snapshot.rows, now);
-
-  if (rows.length !== snapshot.rows.length) {
     await writeSnapshotFile({
       ...snapshot,
       rows,
     });
-  }
+  });
+}
+
+export async function clearJiraSnapshots(now = new Date()): Promise<void> {
+  await serializeSnapshotMutation(() =>
+    writeSnapshotFile(createEmptySnapshotFile(now)),
+  );
+}
+
+export async function pruneJiraSnapshots(now = new Date()): Promise<void> {
+  await serializeSnapshotMutation(async () => {
+    const snapshot = await readSnapshotFile();
+    const rows = removeExpiredRows(snapshot.rows, now);
+
+    if (rows.length !== snapshot.rows.length) {
+      await writeSnapshotFile({
+        ...snapshot,
+        rows,
+      });
+    }
+  });
 }
 
 export async function getJiraSnapshotRows(): Promise<JiraSnapshotRow[]> {
@@ -146,7 +178,12 @@ export async function getJiraSnapshotSummary(): Promise<JiraSnapshotSummary> {
 }
 
 export async function getLastSnapshotClearTime(): Promise<Date> {
-  const snapshot = await readSnapshotFile();
+  const snapshot = await readSnapshotFileIfExists();
+
+  if (!snapshot) {
+    return new Date(0);
+  }
+
   const parsed = new Date(snapshot.last_cleared_at);
 
   if (Number.isNaN(parsed.getTime())) {

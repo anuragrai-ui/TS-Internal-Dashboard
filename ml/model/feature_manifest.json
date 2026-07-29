@@ -1,0 +1,116 @@
+{
+  "feature_order": [
+    "priority_rank",
+    "severity_rank",
+    "has_major_incident",
+    "has_escalation_field",
+    "is_done",
+    "days_since_created",
+    "days_since_updated",
+    "comment_count",
+    "attachment_count",
+    "subtask_count",
+    "labels_count",
+    "text_immediate_hits",
+    "text_watch_hits",
+    "team_present",
+    "pod_present",
+    "support_category_present",
+    "source_present",
+    "urgency_present",
+    "affected_services_count"
+  ],
+  "immediate_keywords": [
+    "escalat",
+    "urgent",
+    "blocker",
+    "blocked",
+    "production",
+    "prod",
+    "client is waiting",
+    "customer is waiting",
+    "sla",
+    "breach",
+    "asap",
+    "critical",
+    "unhappy",
+    "frustrated",
+    "delay"
+  ],
+  "watch_keywords": [
+    "follow up",
+    "following up",
+    "eta",
+    "waiting",
+    "reminder",
+    "pending",
+    "need update",
+    "status update"
+  ],
+  "severity_rank_keywords": [
+    [
+      1,
+      [
+        "critical",
+        "blocker",
+        "sev1",
+        "sev 1"
+      ]
+    ],
+    [
+      2,
+      [
+        "major",
+        "high",
+        "sev2",
+        "sev 2"
+      ]
+    ],
+    [
+      3,
+      [
+        "moderate",
+        "medium",
+        "sev3",
+        "sev 3"
+      ]
+    ],
+    [
+      4,
+      [
+        "minor",
+        "low",
+        "sev4",
+        "sev 4"
+      ]
+    ],
+    [
+      5,
+      [
+        "trivial",
+        "sev5",
+        "sev 5"
+      ]
+    ]
+  ],
+  "negative_tokens": [
+    "false",
+    "n/a",
+    "na",
+    "no",
+    "none"
+  ],
+  "onnx_input_name": "input",
+  "onnx_scores_output_name": "scores",
+  "score_immediate_threshold": -2.893633954410141e-17,
+  "score_watch_threshold": 0.11040291151958313,
+  "score_min": -0.08982951335081778,
+  "score_max": 0.1906899480947302,
+  "training": {
+    "n_estimators": 200,
+    "contamination": 0.1,
+    "seed": 42,
+    "train_size": 4250,
+    "holdout_size": 750
+  }
+}

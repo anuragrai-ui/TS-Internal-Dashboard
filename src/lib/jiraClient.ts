@@ -16,8 +16,22 @@ interface JiraNamedField {
   name?: string;
 }
 
+interface JiraStatus {
+  name?: string;
+  statusCategory?: { key?: string; name?: string } | null;
+}
+
 interface JiraOption {
   value?: string;
+}
+
+interface JiraServiceRef {
+  name?: string;
+}
+
+interface JiraProgress {
+  progress?: number;
+  total?: number;
 }
 
 interface JiraIssueFields {
@@ -31,26 +45,26 @@ interface JiraIssueFields {
   issuetype?: JiraNamedField | null;
   labels?: string[];
   priority?: JiraNamedField | null;
+  progress?: JiraProgress | null;
   project?: JiraNamedField | null;
   reporter?: JiraAccount | null;
-  status?: JiraNamedField | null;
+  status?: JiraStatus | null;
   subtasks?: unknown[];
   summary?: string;
   updated?: string;
 
-  /* Custom fields from all_filed.json */
+  /* Custom fields - IDs verified against all_filed.json field metadata export */
+  customfield_10039?: JiraServiceRef[] | null; /* Affected services */
+  customfield_10042?: JiraOption | null; /* Urgency Levels */
+  customfield_10043?: JiraOption | null; /* Pending reason */
+  customfield_10046?: string | null; /* Major incident */
+  customfield_10048?: JiraOption | null; /* Severity */
   customfield_10054?: JiraOption | null; /* Source */
-  customfield_1182?: JiraOption | null; /* Team */
-  customfield_1209?: JiraOption | null; /* Urgency Levels */
-  customfield_1265?: JiraOption | null; /* Pending reason */
-  customfield_1306?: JiraOption | null; /* Pod */
-  customfield_1326?: JiraOption | null; /* Client Support Task Type */
-  customfield_1346?: JiraOption | null; /* Support Category */
-  customfield_1386?: JiraOption | null; /* Client Support Escalation Field */
-  customfield_1453?: JiraOption | null; /* Major incident */
-  customfield_1600?: JiraOption | null; /* Severity */
-  customfield_1665?: unknown; /* Affected services */
-  customfield_1731?: JiraOption | null; /* Progress */
+  customfield_10162?: JiraOption[] | null; /* Team */
+  customfield_10165?: JiraOption | null; /* Pod */
+  customfield_10166?: JiraOption | null; /* Support Category */
+  customfield_10287?: JiraOption | null; /* Client Support Task Type */
+  customfield_10288?: JiraOption | null; /* Client Support Escalation Field */
 }
 
 interface JiraIssue {
@@ -109,6 +123,7 @@ export interface FormattedIssue {
   severity?: string;
   source?: string;
   status?: string;
+  status_category?: string;
   subtask_count: number;
   summary?: string;
   support_category?: string;
@@ -219,18 +234,18 @@ const JIRA_FIELDS = [
   "attachment",
   "subtasks",
   "project",
+  "progress",
+  "customfield_10039",
+  "customfield_10042",
+  "customfield_10043",
+  "customfield_10046",
+  "customfield_10048",
   "customfield_10054",
-  "customfield_1182",
-  "customfield_1209",
-  "customfield_1265",
-  "customfield_1306",
-  "customfield_1326",
-  "customfield_1346",
-  "customfield_1386",
-  "customfield_1453",
-  "customfield_1600",
-  "customfield_1665",
-  "customfield_1731",
+  "customfield_10162",
+  "customfield_10165",
+  "customfield_10166",
+  "customfield_10287",
+  "customfield_10288",
 ].join(",");
 
 async function searchIssues(jql: string, maxResults = 100): Promise<JiraIssue[]> {
@@ -316,6 +331,30 @@ function getOptionValue(option: JiraOption | null | undefined): string | undefin
   return option?.value;
 }
 
+function getOptionArrayValue(items: JiraOption[] | null | undefined): string | undefined {
+  if (!Array.isArray(items) || items.length === 0) {
+    return undefined;
+  }
+  const values = items.map((item) => item.value).filter((value): value is string => Boolean(value));
+  return values.length > 0 ? values.join(", ") : undefined;
+}
+
+function getServiceArrayValue(items: JiraServiceRef[] | null | undefined): string | undefined {
+  if (!Array.isArray(items) || items.length === 0) {
+    return undefined;
+  }
+  const names = items.map((item) => item.name).filter((name): name is string => Boolean(name));
+  return names.length > 0 ? names.join(", ") : undefined;
+}
+
+function getProgressValue(progress: JiraProgress | null | undefined): string | undefined {
+  if (!progress || typeof progress.total !== "number" || progress.total <= 0) {
+    return undefined;
+  }
+  const percent = Math.round(((progress.progress ?? 0) / progress.total) * 100);
+  return `${percent}%`;
+}
+
 function formatArrayField(items: Array<{ name?: string }> | undefined): string[] {
   if (!Array.isArray(items)) {
     return [];
@@ -351,38 +390,39 @@ function formatIssue(
 
   return {
     action_date: latestComment?.created ?? fields.updated,
-    affected_services: getOptionValue(fields.customfield_1665 as JiraOption | undefined),
+    affected_services: getServiceArrayValue(fields.customfield_10039),
     assignee: fields.assignee?.displayName ?? "Unassigned",
     attachment_count: fields.attachment?.length ?? 0,
-    client_support_task_type: getOptionValue(fields.customfield_1326),
+    client_support_task_type: getOptionValue(fields.customfield_10287),
     comment_count: fields.comment?.comments?.length ?? 0,
     components: formatArrayField(fields.components),
     created: fields.created,
     description: truncateText(fields.description),
     duedate: fields.duedate,
-    escalation_field: getOptionValue(fields.customfield_1386),
+    escalation_field: getOptionValue(fields.customfield_10288),
     issue_type: fields.issuetype?.name,
     key: issue.key,
     labels: fields.labels ?? [],
     latest_comment_created: latestComment?.created ?? "",
-    major_incident: getOptionValue(fields.customfield_1453),
-    pending_reason: getOptionValue(fields.customfield_1265),
+    major_incident: fields.customfield_10046 ?? undefined,
+    pending_reason: getOptionValue(fields.customfield_10043),
     priority,
     priority_sort: priorityRank[priority] ?? 99,
-    progress: getOptionValue(fields.customfield_1731),
+    progress: getProgressValue(fields.progress),
     project: fields.project?.key,
     reporter: fields.reporter?.displayName ?? "",
-    severity: getOptionValue(fields.customfield_1600),
+    severity: getOptionValue(fields.customfield_10048),
     source: getOptionValue(fields.customfield_10054),
     status: fields.status?.name,
+    status_category: fields.status?.statusCategory?.key ?? undefined,
     subtask_count: fields.subtasks?.length ?? 0,
     summary: fields.summary,
-    support_category: getOptionValue(fields.customfield_1346),
-    team: getOptionValue(fields.customfield_1182),
+    support_category: getOptionValue(fields.customfield_10166),
+    team: getOptionArrayValue(fields.customfield_10162),
     updated: fields.updated,
-    urgency: getOptionValue(fields.customfield_1209),
+    urgency: getOptionValue(fields.customfield_10042),
     url: `${baseUrl}/browse/${issue.key}`,
-    pod: getOptionValue(fields.customfield_1306),
+    pod: getOptionValue(fields.customfield_10165),
   };
 }
 
@@ -536,7 +576,10 @@ export async function getCategoryIssues(
 
   const issues = await category.loader();
   setCache(cacheKey, issues);
-  await saveCategorySnapshot(categoryKey, category, issues);
+
+  saveCategorySnapshot(categoryKey, category, issues).catch((error) => {
+    console.error(`Failed to persist Jira snapshot for ${categoryKey}:`, error);
+  });
 
   return [category, issues];
 }
@@ -548,7 +591,12 @@ export async function refreshAllCategories(): Promise<void> {
     if (category) {
       const issues = await category.loader();
       setCache(`category:${categoryKey}`, issues);
-      await saveCategorySnapshot(categoryKey, category, issues);
+
+      try {
+        await saveCategorySnapshot(categoryKey, category, issues);
+      } catch (error) {
+        console.error(`Failed to persist Jira snapshot for ${categoryKey}:`, error);
+      }
     }
   }
 }

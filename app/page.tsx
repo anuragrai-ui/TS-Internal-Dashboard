@@ -24,6 +24,8 @@ export default async function DashboardPage(): Promise<React.ReactElement> {
   const user = await getCurrentUser();
   const snapshot = await getJiraSnapshotSummary();
   const totalTickets = tiles.reduce((sum, tile) => sum + tile.count, 0);
+  const actionableCount = tiles.find((tile) => tile.key === "actionable")?.count ?? 0;
+  const waitingCount = totalTickets - actionableCount;
 
   return (
     <>
@@ -67,16 +69,14 @@ export default async function DashboardPage(): Promise<React.ReactElement> {
           <div className="stat-card">
             <div className="stat-icon success" aria-hidden="true">⚡</div>
             <div className="stat-content">
-              <div className="stat-value">{tiles[0]?.count ?? 0}</div>
+              <div className="stat-value">{actionableCount}</div>
               <div className="stat-label">Actionable items</div>
             </div>
           </div>
           <div className="stat-card">
             <div className="stat-icon warning" aria-hidden="true">⏳</div>
             <div className="stat-content">
-              <div className="stat-value">
-                {(tiles[1]?.count ?? 0) + (tiles[2]?.count ?? 0) + (tiles[3]?.count ?? 0)}
-              </div>
+              <div className="stat-value">{waitingCount}</div>
               <div className="stat-label">Waiting on others</div>
             </div>
           </div>

@@ -1,14 +1,36 @@
-import { getLocalHeuristicAnalysis } from "@/lib/escalationHeuristics";
+import { getFallbackAnalysis } from "@/lib/mlEscalationModel";
 import type { FormattedIssue, TicketCommentContext } from "@/lib/jiraClient";
 import { getTicketCommentContext } from "@/lib/jiraClient";
 
 const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+const HUGGINGFACE_ENDPOINT = "https://router.huggingface.co/v1/chat/completions";
+
+type EscalationProvider = "openrouter" | "huggingface";
+
+function getProvider(): EscalationProvider {
+  const value = process.env.ESCALATION_PROVIDER?.toLowerCase();
+  return value === "huggingface" ? "huggingface" : "openrouter";
+}
+
+function getEndpoint(): string {
+  return getProvider() === "huggingface" ? HUGGINGFACE_ENDPOINT : OPENROUTER_ENDPOINT;
+}
 
 function getPrimaryModel(): string {
+  if (getProvider() === "huggingface") {
+    return process.env.HF_MODEL ?? "google/gemma-4-31B-it:novita";
+  }
   return process.env.OPENROUTER_MODEL ?? "openai/gpt-oss-120b:free";
 }
 
 function getFallbackModel(): string {
+  if (getProvider() === "huggingface") {
+    return (
+      process.env.HF_FALLBACK_MODEL ??
+      process.env.HF_MODEL ??
+      "google/gemma-4-31B-it:novita"
+    );
+  }
   return (
     process.env.OPENROUTER_FALLBACK_MODEL ??
     process.env.OPENROUTER_MODEL ??
@@ -16,8 +38,10 @@ function getFallbackModel(): string {
   );
 }
 
-function getOpenRouterApiKey(): string | undefined {
-  return process.env.OPENROUTER_API_KEY;
+function getApiKey(): string | undefined {
+  return getProvider() === "huggingface"
+    ? process.env.HF_TOKEN
+    : process.env.OPENROUTER_API_KEY;
 }
 
 function isEscalationEnabled(): boolean {
@@ -32,16 +56,24 @@ const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 const MAX_DELAY_MS = 10_000;
 const FALLBACK_COOLDOWN_MS = 500;
 
+function parseIntEnv(value: string | undefined, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function getMaxRetries(): number {
-  return Number.parseInt(process.env.OPENROUTER_MAX_RETRIES ?? "4", 10);
+  return parseIntEnv(process.env.OPENROUTER_MAX_RETRIES, 4);
 }
 
 function getRequestTimeoutMs(): number {
-  return Number.parseInt(process.env.OPENROUTER_REQUEST_TIMEOUT_MS ?? "45000", 10);
+  return parseIntEnv(process.env.OPENROUTER_REQUEST_TIMEOUT_MS, 45000);
 }
 
 function getBaseDelayMs(): number {
-  return Number.parseInt(process.env.OPENROUTER_BASE_DELAY_MS ?? "500", 10);
+  return parseIntEnv(process.env.OPENROUTER_BASE_DELAY_MS, 500);
 }
 
 export type EscalationRiskLevel = "immediate" | "watch" | "normal" | "unknown";
@@ -79,6 +111,19 @@ interface RawAnalysis {
 }
 
 const analysisCache = new Map<string, TicketEscalationAnalysis[]>();
+const MAX_ANALYSIS_CACHE_ENTRIES = 50;
+
+function setAnalysisCache(key: string, value: TicketEscalationAnalysis[]): void {
+  analysisCache.delete(key);
+  analysisCache.set(key, value);
+
+  if (analysisCache.size > MAX_ANALYSIS_CACHE_ENTRIES) {
+    const oldestKey = analysisCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      analysisCache.delete(oldestKey);
+    }
+  }
+}
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -144,12 +189,15 @@ function extractContent(response: OpenRouterChatResponse): string {
   return response.choices?.[0]?.message?.content?.trim() ?? "";
 }
 
-function parseAnalyses(text: string, issues: FormattedIssue[]): TicketEscalationAnalysis[] {
+async function parseAnalyses(
+  text: string,
+  inputs: TicketAnalysisInput[],
+): Promise<TicketEscalationAnalysis[]> {
   const jsonStart = text.indexOf("[");
   const jsonEnd = text.lastIndexOf("]");
 
   if (jsonStart === -1 || jsonEnd === -1 || jsonEnd < jsonStart) {
-    return issues.map((issue) => getLocalHeuristicAnalysis(issue));
+    return Promise.all(inputs.map(({ comments, issue }) => getFallbackAnalysis(issue, comments)));
   }
 
   let parsed: unknown;
@@ -157,11 +205,11 @@ function parseAnalyses(text: string, issues: FormattedIssue[]): TicketEscalation
   try {
     parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
   } catch {
-    return issues.map((issue) => getLocalHeuristicAnalysis(issue));
+    return Promise.all(inputs.map(({ comments, issue }) => getFallbackAnalysis(issue, comments)));
   }
 
   if (!Array.isArray(parsed)) {
-    return issues.map((issue) => getLocalHeuristicAnalysis(issue));
+    return Promise.all(inputs.map(({ comments, issue }) => getFallbackAnalysis(issue, comments)));
   }
 
   const byKey = new Map(
@@ -170,7 +218,7 @@ function parseAnalyses(text: string, issues: FormattedIssue[]): TicketEscalation
       .map((item) => [typeof item.key === "string" ? item.key : "", item]),
   );
 
-  return issues.map((issue) =>
+  return inputs.map(({ issue }) =>
     normalizeAnalysis(byKey.get(issue.key) ?? {}, issue),
   );
 }
@@ -204,29 +252,36 @@ async function callOpenRouter(
   model: string,
   inputs: TicketAnalysisInput[],
 ): Promise<TicketEscalationAnalysis[] | null> {
-  const apiKey = getOpenRouterApiKey();
+  const apiKey = getApiKey();
 
   if (!isEscalationEnabled() || !apiKey) {
-    return inputs.map(({ comments, issue }) => getLocalHeuristicAnalysis(issue, comments));
+    return Promise.all(inputs.map(({ comments, issue }) => getFallbackAnalysis(issue, comments)));
   }
 
+  const provider = getProvider();
+  const endpoint = getEndpoint();
   const maxRetries = getMaxRetries();
+
+  const body: Record<string, unknown> = {
+    messages: [
+      {
+        content: buildPrompt(inputs),
+        role: "user",
+      },
+    ],
+    model,
+    temperature: 0.1,
+  };
+
+  if (provider === "openrouter") {
+    body.reasoning = { enabled: isReasoningEnabled() };
+    body.response_format = { type: "json_object" };
+  }
 
   for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
     try {
-      const response = await fetch(OPENROUTER_ENDPOINT, {
-        body: JSON.stringify({
-          messages: [
-            {
-              content: buildPrompt(inputs),
-              role: "user",
-            },
-          ],
-          model,
-          reasoning: { enabled: isReasoningEnabled() },
-          response_format: { type: "json_object" },
-          temperature: 0.1,
-        }),
+      const response = await fetch(endpoint, {
+        body: JSON.stringify(body),
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
@@ -239,21 +294,18 @@ async function callOpenRouter(
         const data = (await response.json()) as OpenRouterChatResponse;
         const text = extractContent(data);
 
-        return parseAnalyses(
-          text,
-          inputs.map(({ issue }) => issue),
-        );
+        return parseAnalyses(text, inputs);
       }
 
       if (!RETRYABLE_STATUSES.has(response.status)) {
         console.warn(
-          `OpenRouter ${model} returned non-retryable status ${response.status}; aborting.`,
+          `${provider} ${model} returned non-retryable status ${response.status}; aborting.`,
         );
         return null;
       }
 
       console.warn(
-        `OpenRouter ${model} returned ${response.status} (attempt ${attempt}/${maxRetries}).`,
+        `${provider} ${model} returned ${response.status} (attempt ${attempt}/${maxRetries}).`,
       );
 
       if (attempt < maxRetries) {
@@ -262,7 +314,7 @@ async function callOpenRouter(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(
-        `OpenRouter ${model} network error on attempt ${attempt}/${maxRetries}: ${message}`,
+        `${provider} ${model} network error on attempt ${attempt}/${maxRetries}: ${message}`,
       );
 
       if (attempt < maxRetries) {
@@ -271,7 +323,7 @@ async function callOpenRouter(
     }
   }
 
-  console.warn(`OpenRouter ${model} exhausted all ${maxRetries} attempts.`);
+  console.warn(`${provider} ${model} exhausted all ${maxRetries} attempts.`);
   return null;
 }
 
@@ -288,17 +340,29 @@ export async function analyzeEscalationRisk(
     return cached;
   }
 
-  const inputs = await Promise.all(
-    scopedIssues.map(async (issue) => ({
-      comments: await getComments(issue.key),
-      issue,
-    })),
-  );
+  let inputs: TicketAnalysisInput[];
+
+  try {
+    inputs = await Promise.all(
+      scopedIssues.map(async (issue) => ({
+        comments: await getComments(issue.key),
+        issue,
+      })),
+    );
+  } catch (error) {
+    console.warn(
+      "Failed to fetch ticket comments for escalation analysis; using ML/local fallback.",
+      error,
+    );
+    const fallback = await Promise.all(scopedIssues.map((issue) => getFallbackAnalysis(issue)));
+    setAnalysisCache(cacheKey, fallback);
+    return fallback;
+  }
 
   try {
     const primary = await callOpenRouter(getPrimaryModel(), inputs);
     if (primary) {
-      analysisCache.set(cacheKey, primary);
+      setAnalysisCache(cacheKey, primary);
       return primary;
     }
 
@@ -307,18 +371,18 @@ export async function analyzeEscalationRisk(
 
     const fallbackModel = await callOpenRouter(getFallbackModel(), inputs);
     if (fallbackModel) {
-      analysisCache.set(cacheKey, fallbackModel);
+      setAnalysisCache(cacheKey, fallbackModel);
       return fallbackModel;
     }
 
-    console.warn("Fallback OpenRouter escalation analysis unavailable; using local heuristics.");
+    console.warn("Fallback OpenRouter escalation analysis unavailable; using ML/local fallback.");
   } catch (error) {
-    console.warn("Unexpected error during OpenRouter escalation analysis; using local heuristics.", error);
+    console.warn("Unexpected error during OpenRouter escalation analysis; using ML/local fallback.", error);
   }
 
-  const fallback = inputs.map(({ comments, issue }) =>
-    getLocalHeuristicAnalysis(issue, comments),
+  const fallback = await Promise.all(
+    inputs.map(({ comments, issue }) => getFallbackAnalysis(issue, comments)),
   );
-  analysisCache.set(cacheKey, fallback);
+  setAnalysisCache(cacheKey, fallback);
   return fallback;
 }

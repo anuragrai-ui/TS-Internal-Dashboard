@@ -13,7 +13,6 @@ function getSystemTheme(): Theme {
 
 function applyTheme(theme: Theme): void {
   document.documentElement.dataset.theme = theme;
-  window.localStorage.setItem(STORAGE_KEY, theme);
   const meta = document.querySelector(META_SELECTOR);
   if (meta) {
     meta.setAttribute("content", theme);
@@ -58,6 +57,7 @@ export function ThemeToggle(): React.ReactElement {
     const nextTheme = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
     applyTheme(nextTheme);
+    window.localStorage.setItem(STORAGE_KEY, nextTheme);
   };
 
   const isDark = mounted ? theme === "dark" : false;

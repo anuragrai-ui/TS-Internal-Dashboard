@@ -1,0 +1,37 @@
+{
+  "holdout_size": 750,
+  "model_level_counts": {
+    "immediate": 74,
+    "watch": 167,
+    "normal": 509
+  },
+  "heuristic_level_counts": {
+    "immediate": 1,
+    "watch": 58,
+    "normal": 691
+  },
+  "cross_tab_heuristic_rows_model_cols": {
+    "immediate": {
+      "immediate": 0,
+      "watch": 1,
+      "normal": 0
+    },
+    "watch": {
+      "immediate": 31,
+      "watch": 25,
+      "normal": 2
+    },
+    "normal": {
+      "immediate": 43,
+      "watch": 141,
+      "normal": 507
+    }
+  },
+  "mean_anomaly_score_by_heuristic_level": {
+    "immediate": 0.0014271448798122144,
+    "watch": -0.005185117212494998,
+    "normal": 0.12520249764499372
+  },
+  "proxy_precision_model_immediate_vs_heuristic_non_normal": 0.4189189189189189,
+  "note": "These are proxy agreement metrics against the pre-existing rule-based heuristic, not accuracy against a real escalation outcome label - none exists in this project. Lower anomaly score = more anomalous. Separation between heuristic buckets in mean_anomaly_score_by_heuristic_level is the main signal that the model's notion of 'unusual' tracks the heuristic's notion of 'risky'."
+}

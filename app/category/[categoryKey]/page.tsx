@@ -29,6 +29,8 @@ export default async function CategoryPage({
   const count = issues.length;
   const analyses = await analyzeEscalationRisk(issues);
   const analysesByKey = new Map(analyses.map((analysis) => [analysis.key, analysis]));
+  const assessedCount = analyses.length;
+  const unassessedCount = count - assessedCount;
   const immediateCount = analyses.filter(
     (analysis) => analysis.risk_level === "immediate",
   ).length;
@@ -103,6 +105,13 @@ export default async function CategoryPage({
             </div>
           </div>
         </section>
+
+        {unassessedCount > 0 ? (
+          <p className="risk-scope-note">
+            AI risk assessment covers the {assessedCount} most recently updated ticket
+            {assessedCount === 1 ? "" : "s"} of {count} total; {unassessedCount} not yet assessed.
+          </p>
+        ) : null}
 
         <div className="ticket-list">
           {count === 0 ? <div className="empty-state">No tickets found.</div> : null}

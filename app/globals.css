@@ -787,6 +787,12 @@ a:focus-visible {
   color: var(--danger);
 }
 
+.risk-scope-note {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin-block-end: var(--space-3);
+}
+
 /* =================================================================
    Ticket list & cards
    ================================================================= */

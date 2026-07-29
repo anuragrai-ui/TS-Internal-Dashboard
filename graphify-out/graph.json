@@ -11,8 +11,8 @@
       "_origin": "ast",
       "community": 7,
       "norm_label": "route.ts",
-      "id": "app_api_health_route",
-      "community_name": "route.ts"
+      "community_name": "route.ts",
+      "id": "app_api_health_route"
     },
     {
       "label": "GET()",
@@ -22,8 +22,8 @@
       "_origin": "ast",
       "community": 7,
       "norm_label": "get()",
-      "id": "app_api_health_route_get",
-      "community_name": "route.ts"
+      "community_name": "route.ts",
+      "id": "app_api_health_route_get"
     },
     {
       "label": "page.tsx",
@@ -33,8 +33,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "page.tsx",
-      "id": "app_category_categorykey_page",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "app_category_categorykey_page"
     },
     {
       "label": "CategoryPageProps",
@@ -44,8 +44,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "categorypageprops",
-      "id": "app_category_categorykey_page_categorypageprops",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "app_category_categorykey_page_categorypageprops"
     },
     {
       "label": "CategoryPage()",
@@ -55,8 +55,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "categorypage()",
-      "id": "app_category_categorykey_page_categorypage",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "app_category_categorykey_page_categorypage"
     },
     {
       "label": "route.ts",
@@ -66,8 +66,8 @@
       "_origin": "ast",
       "community": 8,
       "norm_label": "route.ts",
-      "id": "app_health_route",
-      "community_name": "route.ts"
+      "community_name": "route.ts",
+      "id": "app_health_route"
     },
     {
       "label": "GET()",
@@ -77,8 +77,8 @@
       "_origin": "ast",
       "community": 8,
       "norm_label": "get()",
-      "id": "app_health_route_get",
-      "community_name": "route.ts"
+      "community_name": "route.ts",
+      "id": "app_health_route_get"
     },
     {
       "label": "page.tsx",
@@ -88,8 +88,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "page.tsx",
-      "id": "app_history_page",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "app_history_page"
     },
     {
       "label": "formatDate()",
@@ -99,8 +99,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "formatdate()",
-      "id": "app_history_page_formatdate",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "app_history_page_formatdate"
     },
     {
       "label": "HistoryPage()",
@@ -110,8 +110,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "historypage()",
-      "id": "app_history_page_historypage",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "app_history_page_historypage"
     },
     {
       "label": "layout.tsx",
@@ -121,8 +121,8 @@
       "_origin": "ast",
       "community": 6,
       "norm_label": "layout.tsx",
-      "id": "app_layout",
-      "community_name": "layout.tsx"
+      "community_name": "layout.tsx",
+      "id": "app_layout"
     },
     {
       "label": "openSans",
@@ -132,8 +132,8 @@
       "_origin": "ast",
       "community": 6,
       "norm_label": "opensans",
-      "id": "app_layout_opensans",
-      "community_name": "layout.tsx"
+      "community_name": "layout.tsx",
+      "id": "app_layout_opensans"
     },
     {
       "label": "metadata",
@@ -143,8 +143,8 @@
       "_origin": "ast",
       "community": 6,
       "norm_label": "metadata",
-      "id": "app_layout_metadata",
-      "community_name": "layout.tsx"
+      "community_name": "layout.tsx",
+      "id": "app_layout_metadata"
     },
     {
       "label": "RootLayout()",
@@ -154,8 +154,8 @@
       "_origin": "ast",
       "community": 6,
       "norm_label": "rootlayout()",
-      "id": "app_layout_rootlayout",
-      "community_name": "layout.tsx"
+      "community_name": "layout.tsx",
+      "id": "app_layout_rootlayout"
     },
     {
       "label": "page.tsx",
@@ -165,8 +165,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "page.tsx",
-      "id": "app_page",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "app_page"
     },
     {
       "label": "categoryIcons",
@@ -176,8 +176,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "categoryicons",
-      "id": "app_page_categoryicons",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "app_page_categoryicons"
     },
     {
       "label": "DashboardPage()",
@@ -187,8 +187,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "dashboardpage()",
-      "id": "app_page_dashboardpage",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "app_page_dashboardpage"
     },
     {
       "label": "route.ts",
@@ -196,10 +196,10 @@
       "source_file": "app/refresh/route.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 4,
+      "community": 5,
       "norm_label": "route.ts",
-      "id": "app_refresh_route",
-      "community_name": "cache.ts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "app_refresh_route"
     },
     {
       "label": "GET()",
@@ -207,10 +207,10 @@
       "source_file": "app/refresh/route.ts",
       "source_location": "L5",
       "_origin": "ast",
-      "community": 4,
+      "community": 5,
       "norm_label": "get()",
-      "id": "app_refresh_route_get",
-      "community_name": "cache.ts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "app_refresh_route_get"
     },
     {
       "label": "eslint.config.js",
@@ -220,8 +220,8 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "eslint.config.js",
-      "id": "eslint_config",
-      "community_name": "eslint.config.js"
+      "community_name": "eslint.config.js",
+      "id": "eslint_config"
     },
     {
       "label": "instrumentation.ts",
@@ -231,8 +231,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "instrumentation.ts",
-      "id": "instrumentation",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "instrumentation"
     },
     {
       "label": "register()",
@@ -242,8 +242,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "register()",
-      "id": "instrumentation_register",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "instrumentation_register"
     },
     {
       "label": "next-env.d.ts",
@@ -253,8 +253,8 @@
       "_origin": "ast",
       "community": 11,
       "norm_label": "next-env.d.ts",
-      "id": "next_env_d",
-      "community_name": "next-env.d.ts"
+      "community_name": "next-env.d.ts",
+      "id": "next_env_d"
     },
     {
       "label": "next.config.ts",
@@ -264,8 +264,8 @@
       "_origin": "ast",
       "community": 9,
       "norm_label": "next.config.ts",
-      "id": "next_config",
-      "community_name": "next.config.ts"
+      "community_name": "next.config.ts",
+      "id": "next_config"
     },
     {
       "label": "nextConfig",
@@ -275,8 +275,8 @@
       "_origin": "ast",
       "community": 9,
       "norm_label": "nextconfig",
-      "id": "next_config_nextconfig",
-      "community_name": "next.config.ts"
+      "community_name": "next.config.ts",
+      "id": "next_config_nextconfig"
     },
     {
       "label": "package.json",
@@ -286,8 +286,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "package.json",
-      "id": "package",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package"
     },
     {
       "label": "name",
@@ -297,8 +297,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "name",
-      "id": "package_name",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_name"
     },
     {
       "label": "version",
@@ -308,8 +308,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "version",
-      "id": "package_version",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_version"
     },
     {
       "label": "private",
@@ -319,8 +319,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "private",
-      "id": "package_private",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_private"
     },
     {
       "label": "type",
@@ -330,8 +330,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "type",
-      "id": "package_type",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_type"
     },
     {
       "label": "scripts",
@@ -341,8 +341,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "scripts",
-      "id": "package_scripts",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_scripts"
     },
     {
       "label": "build",
@@ -352,8 +352,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "build",
-      "id": "package_scripts_build",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_scripts_build"
     },
     {
       "label": "dev",
@@ -363,8 +363,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "dev",
-      "id": "package_scripts_dev",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_scripts_dev"
     },
     {
       "label": "lint",
@@ -374,8 +374,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "lint",
-      "id": "package_scripts_lint",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_scripts_lint"
     },
     {
       "label": "start",
@@ -385,8 +385,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "start",
-      "id": "package_scripts_start",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_scripts_start"
     },
     {
       "label": "test:escalation",
@@ -396,8 +396,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "test:escalation",
-      "id": "package_scripts_test_escalation",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_scripts_test_escalation"
     },
     {
       "label": "test:theme",
@@ -407,8 +407,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "test:theme",
-      "id": "package_scripts_test_theme",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_scripts_test_theme"
     },
     {
       "label": "typecheck",
@@ -418,8 +418,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "typecheck",
-      "id": "package_scripts_typecheck",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_scripts_typecheck"
     },
     {
       "label": "dependencies",
@@ -429,8 +429,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "dependencies",
-      "id": "package_dependencies",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_dependencies"
     },
     {
       "label": "next",
@@ -440,8 +440,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "next",
-      "id": "package_dependencies_next",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_dependencies_next"
     },
     {
       "label": "react",
@@ -451,8 +451,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "react",
-      "id": "package_dependencies_react",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_dependencies_react"
     },
     {
       "label": "react-dom",
@@ -462,8 +462,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "react-dom",
-      "id": "package_dependencies_react_dom",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_dependencies_react_dom"
     },
     {
       "label": "devDependencies",
@@ -473,8 +473,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "devdependencies",
-      "id": "package_devdependencies",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_devdependencies"
     },
     {
       "label": "@eslint/js",
@@ -484,8 +484,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "@eslint/js",
-      "id": "package_devdependencies_eslint_js",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_devdependencies_eslint_js"
     },
     {
       "label": "@types/node",
@@ -495,8 +495,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "@types/node",
-      "id": "package_devdependencies_types_node",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_devdependencies_types_node"
     },
     {
       "label": "@types/react",
@@ -506,8 +506,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "@types/react",
-      "id": "package_devdependencies_types_react",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_devdependencies_types_react"
     },
     {
       "label": "@types/react-dom",
@@ -517,8 +517,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "@types/react-dom",
-      "id": "package_devdependencies_types_react_dom",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_devdependencies_types_react_dom"
     },
     {
       "label": "eslint",
@@ -528,8 +528,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "eslint",
-      "id": "package_devdependencies_eslint",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_devdependencies_eslint"
     },
     {
       "label": "typescript",
@@ -539,8 +539,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "typescript",
-      "id": "package_devdependencies_typescript",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_devdependencies_typescript"
     },
     {
       "label": "typescript-eslint",
@@ -550,8 +550,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "typescript-eslint",
-      "id": "package_devdependencies_typescript_eslint",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_devdependencies_typescript_eslint"
     },
     {
       "label": "engines",
@@ -561,8 +561,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "engines",
-      "id": "package_engines",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_engines"
     },
     {
       "label": "node",
@@ -572,8 +572,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "node",
-      "id": "package_engines_node",
-      "community_name": "package.json"
+      "community_name": "package.json",
+      "id": "package_engines_node"
     },
     {
       "label": "proxy.ts",
@@ -583,8 +583,8 @@
       "_origin": "ast",
       "community": 14,
       "norm_label": "proxy.ts",
-      "id": "proxy",
-      "community_name": "proxy.ts"
+      "community_name": "proxy.ts",
+      "id": "proxy"
     },
     {
       "label": "proxy()",
@@ -594,8 +594,8 @@
       "_origin": "ast",
       "community": 14,
       "norm_label": "proxy()",
-      "id": "proxy_proxy",
-      "community_name": "proxy.ts"
+      "community_name": "proxy.ts",
+      "id": "proxy_proxy"
     },
     {
       "label": "test-escalation.ts",
@@ -605,8 +605,8 @@
       "_origin": "ast",
       "community": 16,
       "norm_label": "test-escalation.ts",
-      "id": "scripts_test_escalation",
-      "community_name": "test-escalation.ts"
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation"
     },
     {
       "label": "makeIssues()",
@@ -616,8 +616,8 @@
       "_origin": "ast",
       "community": 16,
       "norm_label": "makeissues()",
-      "id": "scripts_test_escalation_makeissues",
-      "community_name": "test-escalation.ts"
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation_makeissues"
     },
     {
       "label": "makeComments()",
@@ -627,8 +627,8 @@
       "_origin": "ast",
       "community": 16,
       "norm_label": "makecomments()",
-      "id": "scripts_test_escalation_makecomments",
-      "community_name": "test-escalation.ts"
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation_makecomments"
     },
     {
       "label": "makeMockGetComments()",
@@ -638,8 +638,8 @@
       "_origin": "ast",
       "community": 16,
       "norm_label": "makemockgetcomments()",
-      "id": "scripts_test_escalation_makemockgetcomments",
-      "community_name": "test-escalation.ts"
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation_makemockgetcomments"
     },
     {
       "label": "assertEqual()",
@@ -649,8 +649,8 @@
       "_origin": "ast",
       "community": 16,
       "norm_label": "assertequal()",
-      "id": "scripts_test_escalation_assertequal",
-      "community_name": "test-escalation.ts"
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation_assertequal"
     },
     {
       "label": "assert()",
@@ -660,8 +660,8 @@
       "_origin": "ast",
       "community": 16,
       "norm_label": "assert()",
-      "id": "scripts_test_escalation_assert",
-      "community_name": "test-escalation.ts"
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation_assert"
     },
     {
       "label": "requireThree()",
@@ -671,8 +671,8 @@
       "_origin": "ast",
       "community": 16,
       "norm_label": "requirethree()",
-      "id": "scripts_test_escalation_requirethree",
-      "community_name": "test-escalation.ts"
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation_requirethree"
     },
     {
       "label": "testHeuristics()",
@@ -682,8 +682,8 @@
       "_origin": "ast",
       "community": 16,
       "norm_label": "testheuristics()",
-      "id": "scripts_test_escalation_testheuristics",
-      "community_name": "test-escalation.ts"
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation_testheuristics"
     },
     {
       "label": "testDisabledOpenRouter()",
@@ -693,8 +693,8 @@
       "_origin": "ast",
       "community": 16,
       "norm_label": "testdisabledopenrouter()",
-      "id": "scripts_test_escalation_testdisabledopenrouter",
-      "community_name": "test-escalation.ts"
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation_testdisabledopenrouter"
     },
     {
       "label": "testOpenRouter503Fallback()",
@@ -704,30 +704,63 @@
       "_origin": "ast",
       "community": 16,
       "norm_label": "testopenrouter503fallback()",
-      "id": "scripts_test_escalation_testopenrouter503fallback",
-      "community_name": "test-escalation.ts"
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation_testopenrouter503fallback"
     },
     {
       "label": "testOpenRouterSuccess()",
       "file_type": "code",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L186",
+      "source_location": "L193",
       "_origin": "ast",
       "community": 16,
       "norm_label": "testopenroutersuccess()",
-      "id": "scripts_test_escalation_testopenroutersuccess",
-      "community_name": "test-escalation.ts"
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation_testopenroutersuccess"
+    },
+    {
+      "label": "testHuggingFaceSuccess()",
+      "file_type": "code",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L266",
+      "_origin": "ast",
+      "community": 16,
+      "norm_label": "testhuggingfacesuccess()",
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation_testhuggingfacesuccess"
+    },
+    {
+      "label": "runLiveHfModel()",
+      "file_type": "code",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L360",
+      "_origin": "ast",
+      "community": 16,
+      "norm_label": "runlivehfmodel()",
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation_runlivehfmodel"
+    },
+    {
+      "label": "testHuggingFaceLive()",
+      "file_type": "code",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L375",
+      "_origin": "ast",
+      "community": 16,
+      "norm_label": "testhuggingfacelive()",
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation_testhuggingfacelive"
     },
     {
       "label": "main()",
       "file_type": "code",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L259",
+      "source_location": "L409",
       "_origin": "ast",
       "community": 16,
       "norm_label": "main()",
-      "id": "scripts_test_escalation_main",
-      "community_name": "test-escalation.ts"
+      "community_name": "test-escalation.ts",
+      "id": "scripts_test_escalation_main"
     },
     {
       "label": "test-theme.ts",
@@ -737,8 +770,8 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "test-theme.ts",
-      "id": "scripts_test_theme",
-      "community_name": "test-theme.ts"
+      "community_name": "test-theme.ts",
+      "id": "scripts_test_theme"
     },
     {
       "label": "cssPath",
@@ -748,8 +781,8 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "csspath",
-      "id": "scripts_test_theme_csspath",
-      "community_name": "test-theme.ts"
+      "community_name": "test-theme.ts",
+      "id": "scripts_test_theme_csspath"
     },
     {
       "label": "css",
@@ -759,8 +792,8 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "css",
-      "id": "scripts_test_theme_css",
-      "community_name": "test-theme.ts"
+      "community_name": "test-theme.ts",
+      "id": "scripts_test_theme_css"
     },
     {
       "label": "assert()",
@@ -770,8 +803,8 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "assert()",
-      "id": "scripts_test_theme_assert",
-      "community_name": "test-theme.ts"
+      "community_name": "test-theme.ts",
+      "id": "scripts_test_theme_assert"
     },
     {
       "label": "extractRuleBlock()",
@@ -781,8 +814,8 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "extractruleblock()",
-      "id": "scripts_test_theme_extractruleblock",
-      "community_name": "test-theme.ts"
+      "community_name": "test-theme.ts",
+      "id": "scripts_test_theme_extractruleblock"
     },
     {
       "label": "rootBlock",
@@ -792,8 +825,8 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "rootblock",
-      "id": "scripts_test_theme_rootblock",
-      "community_name": "test-theme.ts"
+      "community_name": "test-theme.ts",
+      "id": "scripts_test_theme_rootblock"
     },
     {
       "label": "darkBlock",
@@ -803,8 +836,8 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "darkblock",
-      "id": "scripts_test_theme_darkblock",
-      "community_name": "test-theme.ts"
+      "community_name": "test-theme.ts",
+      "id": "scripts_test_theme_darkblock"
     },
     {
       "label": "lightOverride",
@@ -814,8 +847,8 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "lightoverride",
-      "id": "scripts_test_theme_lightoverride",
-      "community_name": "test-theme.ts"
+      "community_name": "test-theme.ts",
+      "id": "scripts_test_theme_lightoverride"
     },
     {
       "label": "darkThumb",
@@ -825,8 +858,8 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "darkthumb",
-      "id": "scripts_test_theme_darkthumb",
-      "community_name": "test-theme.ts"
+      "community_name": "test-theme.ts",
+      "id": "scripts_test_theme_darkthumb"
     },
     {
       "label": "hero",
@@ -836,8 +869,8 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "hero",
-      "id": "scripts_test_theme_hero",
-      "community_name": "test-theme.ts"
+      "community_name": "test-theme.ts",
+      "id": "scripts_test_theme_hero"
     },
     {
       "label": "statCard",
@@ -847,8 +880,8 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "statcard",
-      "id": "scripts_test_theme_statcard",
-      "community_name": "test-theme.ts"
+      "community_name": "test-theme.ts",
+      "id": "scripts_test_theme_statcard"
     },
     {
       "label": "prefersDark",
@@ -858,8 +891,8 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "prefersdark",
-      "id": "scripts_test_theme_prefersdark",
-      "community_name": "test-theme.ts"
+      "community_name": "test-theme.ts",
+      "id": "scripts_test_theme_prefersdark"
     },
     {
       "label": "reducedMotion",
@@ -869,8 +902,8 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "reducedmotion",
-      "id": "scripts_test_theme_reducedmotion",
-      "community_name": "test-theme.ts"
+      "community_name": "test-theme.ts",
+      "id": "scripts_test_theme_reducedmotion"
     },
     {
       "label": "RefreshCountdown.tsx",
@@ -880,8 +913,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "refreshcountdown.tsx",
-      "id": "src_components_refreshcountdown",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_components_refreshcountdown"
     },
     {
       "label": "RefreshCountdownProps",
@@ -891,8 +924,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "refreshcountdownprops",
-      "id": "src_components_refreshcountdown_refreshcountdownprops",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_components_refreshcountdown_refreshcountdownprops"
     },
     {
       "label": "formatRemainingSeconds()",
@@ -902,8 +935,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "formatremainingseconds()",
-      "id": "src_components_refreshcountdown_formatremainingseconds",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_components_refreshcountdown_formatremainingseconds"
     },
     {
       "label": "RefreshCountdown()",
@@ -913,8 +946,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "refreshcountdown()",
-      "id": "src_components_refreshcountdown_refreshcountdown",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_components_refreshcountdown_refreshcountdown"
     },
     {
       "label": "ThemeToggle.tsx",
@@ -924,8 +957,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "themetoggle.tsx",
-      "id": "src_components_themetoggle",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_components_themetoggle"
     },
     {
       "label": "Theme",
@@ -935,8 +968,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "theme",
-      "id": "src_components_themetoggle_theme",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_components_themetoggle_theme"
     },
     {
       "label": "getSystemTheme()",
@@ -946,8 +979,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "getsystemtheme()",
-      "id": "src_components_themetoggle_getsystemtheme",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_components_themetoggle_getsystemtheme"
     },
     {
       "label": "applyTheme()",
@@ -957,8 +990,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "applytheme()",
-      "id": "src_components_themetoggle_applytheme",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_components_themetoggle_applytheme"
     },
     {
       "label": "subscribeToSystemTheme()",
@@ -968,8 +1001,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "subscribetosystemtheme()",
-      "id": "src_components_themetoggle_subscribetosystemtheme",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_components_themetoggle_subscribetosystemtheme"
     },
     {
       "label": "getSystemThemeSnapshot()",
@@ -979,8 +1012,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "getsystemthemesnapshot()",
-      "id": "src_components_themetoggle_getsystemthemesnapshot",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_components_themetoggle_getsystemthemesnapshot"
     },
     {
       "label": "ThemeToggle()",
@@ -990,8 +1023,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "themetoggle()",
-      "id": "src_components_themetoggle_themetoggle",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_components_themetoggle_themetoggle"
     },
     {
       "label": "TicketCard.tsx",
@@ -999,10 +1032,10 @@
       "source_file": "src/components/TicketCard.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 13,
+      "community": 4,
       "norm_label": "ticketcard.tsx",
-      "id": "src_components_ticketcard",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "TicketCard.tsx",
+      "id": "src_components_ticketcard"
     },
     {
       "label": "TicketCardProps",
@@ -1010,10 +1043,10 @@
       "source_file": "src/components/TicketCard.tsx",
       "source_location": "L4",
       "_origin": "ast",
-      "community": 13,
+      "community": 4,
       "norm_label": "ticketcardprops",
-      "id": "src_components_ticketcard_ticketcardprops",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "TicketCard.tsx",
+      "id": "src_components_ticketcard_ticketcardprops"
     },
     {
       "label": "getRiskLabel()",
@@ -1021,10 +1054,10 @@
       "source_file": "src/components/TicketCard.tsx",
       "source_location": "L9",
       "_origin": "ast",
-      "community": 13,
+      "community": 4,
       "norm_label": "getrisklabel()",
-      "id": "src_components_ticketcard_getrisklabel",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "TicketCard.tsx",
+      "id": "src_components_ticketcard_getrisklabel"
     },
     {
       "label": "TicketCard()",
@@ -1032,10 +1065,10 @@
       "source_file": "src/components/TicketCard.tsx",
       "source_location": "L29",
       "_origin": "ast",
-      "community": 13,
+      "community": 4,
       "norm_label": "ticketcard()",
-      "id": "src_components_ticketcard_ticketcard",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "TicketCard.tsx",
+      "id": "src_components_ticketcard_ticketcard"
     },
     {
       "label": "cache.ts",
@@ -1043,10 +1076,10 @@
       "source_file": "src/lib/cache.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 4,
+      "community": 5,
       "norm_label": "cache.ts",
-      "id": "src_lib_cache",
-      "community_name": "cache.ts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_cache"
     },
     {
       "label": "CacheEntry",
@@ -1054,10 +1087,10 @@
       "source_file": "src/lib/cache.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 4,
+      "community": 5,
       "norm_label": "cacheentry",
-      "id": "src_lib_cache_cacheentry",
-      "community_name": "cache.ts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_cache_cacheentry"
     },
     {
       "label": "cache",
@@ -1065,10 +1098,10 @@
       "source_file": "src/lib/cache.ts",
       "source_location": "L7",
       "_origin": "ast",
-      "community": 4,
+      "community": 5,
       "norm_label": "cache",
-      "id": "src_lib_cache_cache",
-      "community_name": "cache.ts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_cache_cache"
     },
     {
       "label": "getCache()",
@@ -1078,8 +1111,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "getcache()",
-      "id": "src_lib_cache_getcache",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_lib_cache_getcache"
     },
     {
       "label": "setCache()",
@@ -1087,10 +1120,10 @@
       "source_file": "src/lib/cache.ts",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 3,
+      "community": 5,
       "norm_label": "setcache()",
-      "id": "src_lib_cache_setcache",
-      "community_name": "page.tsx"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_cache_setcache"
     },
     {
       "label": "getCacheMeta()",
@@ -1098,10 +1131,10 @@
       "source_file": "src/lib/cache.ts",
       "source_location": "L35",
       "_origin": "ast",
-      "community": 4,
+      "community": 3,
       "norm_label": "getcachemeta()",
-      "id": "src_lib_cache_getcachemeta",
-      "community_name": "cache.ts"
+      "community_name": "page.tsx",
+      "id": "src_lib_cache_getcachemeta"
     },
     {
       "label": "clearCache()",
@@ -1109,10 +1142,10 @@
       "source_file": "src/lib/cache.ts",
       "source_location": "L50",
       "_origin": "ast",
-      "community": 4,
+      "community": 5,
       "norm_label": "clearcache()",
-      "id": "src_lib_cache_clearcache",
-      "community_name": "cache.ts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_cache_clearcache"
     },
     {
       "label": "escalationHeuristics.ts",
@@ -1120,10 +1153,10 @@
       "source_file": "src/lib/escalationHeuristics.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 13,
+      "community": 4,
       "norm_label": "escalationheuristics.ts",
-      "id": "src_lib_escalationheuristics",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "TicketCard.tsx",
+      "id": "src_lib_escalationheuristics"
     },
     {
       "label": "getLocalHeuristicAnalysis()",
@@ -1133,8 +1166,8 @@
       "_origin": "ast",
       "community": 13,
       "norm_label": "getlocalheuristicanalysis()",
-      "id": "src_lib_escalationheuristics_getlocalheuristicanalysis",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_escalationheuristics_getlocalheuristicanalysis"
     },
     {
       "label": "jiraClient.ts",
@@ -1144,8 +1177,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "jiraclient.ts",
-      "id": "src_lib_jiraclient",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient"
     },
     {
       "label": "JiraAccount",
@@ -1155,8 +1188,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "jiraaccount",
-      "id": "src_lib_jiraclient_jiraaccount",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_jiraaccount"
     },
     {
       "label": "JiraNamedField",
@@ -1166,8 +1199,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "jiranamedfield",
-      "id": "src_lib_jiraclient_jiranamedfield",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_jiranamedfield"
     },
     {
       "label": "JiraOption",
@@ -1177,8 +1210,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "jiraoption",
-      "id": "src_lib_jiraclient_jiraoption",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_jiraoption"
     },
     {
       "label": "JiraIssueFields",
@@ -1188,8 +1221,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "jiraissuefields",
-      "id": "src_lib_jiraclient_jiraissuefields",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_jiraissuefields"
     },
     {
       "label": "JiraIssue",
@@ -1199,8 +1232,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "jiraissue",
-      "id": "src_lib_jiraclient_jiraissue",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_jiraissue"
     },
     {
       "label": "JiraComment",
@@ -1210,8 +1243,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "jiracomment",
-      "id": "src_lib_jiraclient_jiracomment",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_jiracomment"
     },
     {
       "label": "TicketCommentContext",
@@ -1219,10 +1252,10 @@
       "source_file": "src/lib/jiraClient.ts",
       "source_location": "L67",
       "_origin": "ast",
-      "community": 13,
+      "community": 4,
       "norm_label": "ticketcommentcontext",
-      "id": "src_lib_jiraclient_ticketcommentcontext",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "TicketCard.tsx",
+      "id": "src_lib_jiraclient_ticketcommentcontext"
     },
     {
       "label": "CurrentUser",
@@ -1232,8 +1265,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "currentuser",
-      "id": "src_lib_jiraclient_currentuser",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_currentuser"
     },
     {
       "label": "DashboardTile",
@@ -1243,8 +1276,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "dashboardtile",
-      "id": "src_lib_jiraclient_dashboardtile",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_dashboardtile"
     },
     {
       "label": "FormattedIssue",
@@ -1252,10 +1285,10 @@
       "source_file": "src/lib/jiraClient.ts",
       "source_location": "L86",
       "_origin": "ast",
-      "community": 13,
+      "community": 4,
       "norm_label": "formattedissue",
-      "id": "src_lib_jiraclient_formattedissue",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "TicketCard.tsx",
+      "id": "src_lib_jiraclient_formattedissue"
     },
     {
       "label": "Category",
@@ -1263,10 +1296,10 @@
       "source_file": "src/lib/jiraClient.ts",
       "source_location": "L122",
       "_origin": "ast",
-      "community": 1,
+      "community": 5,
       "norm_label": "category",
-      "id": "src_lib_jiraclient_category",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jiraclient_category"
     },
     {
       "label": "CategoryCacheMeta",
@@ -1276,8 +1309,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "categorycachemeta",
-      "id": "src_lib_jiraclient_categorycachemeta",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_categorycachemeta"
     },
     {
       "label": "requireJiraConfig()",
@@ -1287,8 +1320,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "requirejiraconfig()",
-      "id": "src_lib_jiraclient_requirejiraconfig",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_requirejiraconfig"
     },
     {
       "label": "formatDateTime()",
@@ -1298,8 +1331,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "formatdatetime()",
-      "id": "src_lib_jiraclient_formatdatetime",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_lib_jiraclient_formatdatetime"
     },
     {
       "label": "jiraGet()",
@@ -1309,8 +1342,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "jiraget()",
-      "id": "src_lib_jiraclient_jiraget",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_jiraget"
     },
     {
       "label": "getCurrentUser()",
@@ -1320,8 +1353,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "getcurrentuser()",
-      "id": "src_lib_jiraclient_getcurrentuser",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_lib_jiraclient_getcurrentuser"
     },
     {
       "label": "JIRA_FIELDS",
@@ -1331,8 +1364,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "jira_fields",
-      "id": "src_lib_jiraclient_jira_fields",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_jira_fields"
     },
     {
       "label": "searchIssues()",
@@ -1342,8 +1375,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "searchissues()",
-      "id": "src_lib_jiraclient_searchissues",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_searchissues"
     },
     {
       "label": "getIssueComments()",
@@ -1353,8 +1386,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "getissuecomments()",
-      "id": "src_lib_jiraclient_getissuecomments",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_getissuecomments"
     },
     {
       "label": "getTicketCommentContext()",
@@ -1364,8 +1397,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "getticketcommentcontext()",
-      "id": "src_lib_jiraclient_getticketcommentcontext",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_getticketcommentcontext"
     },
     {
       "label": "latestCommentIsFromReporter()",
@@ -1375,8 +1408,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "latestcommentisfromreporter()",
-      "id": "src_lib_jiraclient_latestcommentisfromreporter",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_latestcommentisfromreporter"
     },
     {
       "label": "latestCommentMentionsReporter()",
@@ -1386,8 +1419,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "latestcommentmentionsreporter()",
-      "id": "src_lib_jiraclient_latestcommentmentionsreporter",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_latestcommentmentionsreporter"
     },
     {
       "label": "getOptionValue()",
@@ -1397,8 +1430,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "getoptionvalue()",
-      "id": "src_lib_jiraclient_getoptionvalue",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_getoptionvalue"
     },
     {
       "label": "formatArrayField()",
@@ -1408,8 +1441,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "formatarrayfield()",
-      "id": "src_lib_jiraclient_formatarrayfield",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_formatarrayfield"
     },
     {
       "label": "truncateText()",
@@ -1419,8 +1452,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "truncatetext()",
-      "id": "src_lib_jiraclient_truncatetext",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_truncatetext"
     },
     {
       "label": "formatIssue()",
@@ -1430,8 +1463,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "formatissue()",
-      "id": "src_lib_jiraclient_formatissue",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_formatissue"
     },
     {
       "label": "getActionableItems()",
@@ -1441,8 +1474,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "getactionableitems()",
-      "id": "src_lib_jiraclient_getactionableitems",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_getactionableitems"
     },
     {
       "label": "getWaitingForProductTickets()",
@@ -1452,8 +1485,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "getwaitingforproducttickets()",
-      "id": "src_lib_jiraclient_getwaitingforproducttickets",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_getwaitingforproducttickets"
     },
     {
       "label": "getWaitingForClientTickets()",
@@ -1463,8 +1496,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "getwaitingforclienttickets()",
-      "id": "src_lib_jiraclient_getwaitingforclienttickets",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_getwaitingforclienttickets"
     },
     {
       "label": "getWaitingForOperationsTickets()",
@@ -1474,8 +1507,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "getwaitingforoperationstickets()",
-      "id": "src_lib_jiraclient_getwaitingforoperationstickets",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_getwaitingforoperationstickets"
     },
     {
       "label": "CATEGORIES",
@@ -1485,8 +1518,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "categories",
-      "id": "src_lib_jiraclient_categories",
-      "community_name": "jiraClient.ts"
+      "community_name": "jiraClient.ts",
+      "id": "src_lib_jiraclient_categories"
     },
     {
       "label": "getDashboardTiles()",
@@ -1496,8 +1529,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "getdashboardtiles()",
-      "id": "src_lib_jiraclient_getdashboardtiles",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_lib_jiraclient_getdashboardtiles"
     },
     {
       "label": "getCategoryIssues()",
@@ -1507,8 +1540,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "getcategoryissues()",
-      "id": "src_lib_jiraclient_getcategoryissues",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_lib_jiraclient_getcategoryissues"
     },
     {
       "label": "refreshAllCategories()",
@@ -1518,8 +1551,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "refreshallcategories()",
-      "id": "src_lib_jiraclient_refreshallcategories",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jiraclient_refreshallcategories"
     },
     {
       "label": "getCategoryCacheMeta()",
@@ -1529,8 +1562,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "getcategorycachemeta()",
-      "id": "src_lib_jiraclient_getcategorycachemeta",
-      "community_name": "page.tsx"
+      "community_name": "page.tsx",
+      "id": "src_lib_jiraclient_getcategorycachemeta"
     },
     {
       "label": "jiraRefreshScheduler.ts",
@@ -1540,8 +1573,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "jirarefreshscheduler.ts",
-      "id": "src_lib_jirarefreshscheduler",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirarefreshscheduler"
     },
     {
       "label": "isSunday()",
@@ -1551,8 +1584,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "issunday()",
-      "id": "src_lib_jirarefreshscheduler_issunday",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirarefreshscheduler_issunday"
     },
     {
       "label": "runScheduledJiraRefresh()",
@@ -1562,8 +1595,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "runscheduledjirarefresh()",
-      "id": "src_lib_jirarefreshscheduler_runscheduledjirarefresh",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirarefreshscheduler_runscheduledjirarefresh"
     },
     {
       "label": "startJiraRefreshScheduler()",
@@ -1573,8 +1606,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "startjirarefreshscheduler()",
-      "id": "src_lib_jirarefreshscheduler_startjirarefreshscheduler",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirarefreshscheduler_startjirarefreshscheduler"
     },
     {
       "label": "jiraSnapshotStore.ts",
@@ -1584,184 +1617,206 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "jirasnapshotstore.ts",
-      "id": "src_lib_jirasnapshotstore",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore"
     },
     {
       "label": "SNAPSHOT_DIR",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L6",
+      "source_location": "L7",
       "_origin": "ast",
       "community": 5,
       "norm_label": "snapshot_dir",
-      "id": "src_lib_jirasnapshotstore_snapshot_dir",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_snapshot_dir"
     },
     {
       "label": "SNAPSHOT_FILE",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L7",
+      "source_location": "L8",
       "_origin": "ast",
       "community": 5,
       "norm_label": "snapshot_file",
-      "id": "src_lib_jirasnapshotstore_snapshot_file",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_snapshot_file"
+    },
+    {
+      "label": "snapshotMutationQueue",
+      "file_type": "code",
+      "source_file": "src/lib/jiraSnapshotStore.ts",
+      "source_location": "L10",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "snapshotmutationqueue",
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_snapshotmutationqueue"
     },
     {
       "label": "JiraSnapshotRow",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L10",
+      "source_location": "L12",
       "_origin": "ast",
-      "community": 13,
+      "community": 4,
       "norm_label": "jirasnapshotrow",
-      "id": "src_lib_jirasnapshotstore_jirasnapshotrow",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "TicketCard.tsx",
+      "id": "src_lib_jirasnapshotstore_jirasnapshotrow"
     },
     {
       "label": "JiraSnapshotFile",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L16",
+      "source_location": "L18",
       "_origin": "ast",
       "community": 5,
       "norm_label": "jirasnapshotfile",
-      "id": "src_lib_jirasnapshotstore_jirasnapshotfile",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_jirasnapshotfile"
     },
     {
       "label": "JiraSnapshotSummary",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L22",
+      "source_location": "L24",
       "_origin": "ast",
       "community": 5,
       "norm_label": "jirasnapshotsummary",
-      "id": "src_lib_jirasnapshotstore_jirasnapshotsummary",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_jirasnapshotsummary"
     },
     {
       "label": "createEmptySnapshotFile()",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L30",
+      "source_location": "L32",
       "_origin": "ast",
       "community": 5,
       "norm_label": "createemptysnapshotfile()",
-      "id": "src_lib_jirasnapshotstore_createemptysnapshotfile",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_createemptysnapshotfile"
     },
     {
       "label": "isSnapshotFile()",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L38",
+      "source_location": "L40",
       "_origin": "ast",
       "community": 5,
       "norm_label": "issnapshotfile()",
-      "id": "src_lib_jirasnapshotstore_issnapshotfile",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_issnapshotfile"
     },
     {
       "label": "readSnapshotFile()",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L51",
+      "source_location": "L53",
       "_origin": "ast",
       "community": 5,
       "norm_label": "readsnapshotfile()",
-      "id": "src_lib_jirasnapshotstore_readsnapshotfile",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_readsnapshotfile"
     },
     {
       "label": "writeSnapshotFile()",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L68",
+      "source_location": "L70",
       "_origin": "ast",
       "community": 5,
       "norm_label": "writesnapshotfile()",
-      "id": "src_lib_jirasnapshotstore_writesnapshotfile",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_writesnapshotfile"
+    },
+    {
+      "label": "serializeSnapshotMutation()",
+      "file_type": "code",
+      "source_file": "src/lib/jiraSnapshotStore.ts",
+      "source_location": "L86",
+      "_origin": "ast",
+      "community": 5,
+      "norm_label": "serializesnapshotmutation()",
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_serializesnapshotmutation"
     },
     {
       "label": "removeExpiredRows()",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L73",
+      "source_location": "L95",
       "_origin": "ast",
       "community": 5,
       "norm_label": "removeexpiredrows()",
-      "id": "src_lib_jirasnapshotstore_removeexpiredrows",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_removeexpiredrows"
     },
     {
       "label": "saveCategorySnapshot()",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L85",
+      "source_location": "L107",
       "_origin": "ast",
       "community": 5,
       "norm_label": "savecategorysnapshot()",
-      "id": "src_lib_jirasnapshotstore_savecategorysnapshot",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_savecategorysnapshot"
     },
     {
       "label": "clearJiraSnapshots()",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L110",
+      "source_location": "L134",
       "_origin": "ast",
       "community": 5,
       "norm_label": "clearjirasnapshots()",
-      "id": "src_lib_jirasnapshotstore_clearjirasnapshots",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_clearjirasnapshots"
     },
     {
       "label": "pruneJiraSnapshots()",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L114",
+      "source_location": "L140",
       "_origin": "ast",
       "community": 5,
       "norm_label": "prunejirasnapshots()",
-      "id": "src_lib_jirasnapshotstore_prunejirasnapshots",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_prunejirasnapshots"
     },
     {
       "label": "getJiraSnapshotRows()",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L126",
+      "source_location": "L154",
       "_origin": "ast",
       "community": 5,
       "norm_label": "getjirasnapshotrows()",
-      "id": "src_lib_jirasnapshotstore_getjirasnapshotrows",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_getjirasnapshotrows"
     },
     {
       "label": "getJiraSnapshotSummary()",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L131",
+      "source_location": "L159",
       "_origin": "ast",
       "community": 5,
       "norm_label": "getjirasnapshotsummary()",
-      "id": "src_lib_jirasnapshotstore_getjirasnapshotsummary",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_getjirasnapshotsummary"
     },
     {
       "label": "getLastSnapshotClearTime()",
       "file_type": "code",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L148",
+      "source_location": "L176",
       "_origin": "ast",
       "community": 5,
       "norm_label": "getlastsnapshotcleartime()",
-      "id": "src_lib_jirasnapshotstore_getlastsnapshotcleartime",
-      "community_name": "scripts"
+      "community_name": "jiraSnapshotStore.ts",
+      "id": "src_lib_jirasnapshotstore_getlastsnapshotcleartime"
     },
     {
       "label": "openrouterEscalation.ts",
@@ -1771,294 +1826,327 @@
       "_origin": "ast",
       "community": 13,
       "norm_label": "openrouterescalation.ts",
-      "id": "src_lib_openrouterescalation",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation"
+    },
+    {
+      "label": "EscalationProvider",
+      "file_type": "code",
+      "source_file": "src/lib/openrouterEscalation.ts",
+      "source_location": "L8",
+      "_origin": "ast",
+      "community": 13,
+      "norm_label": "escalationprovider",
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_escalationprovider"
+    },
+    {
+      "label": "getProvider()",
+      "file_type": "code",
+      "source_file": "src/lib/openrouterEscalation.ts",
+      "source_location": "L10",
+      "_origin": "ast",
+      "community": 13,
+      "norm_label": "getprovider()",
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_getprovider"
+    },
+    {
+      "label": "getEndpoint()",
+      "file_type": "code",
+      "source_file": "src/lib/openrouterEscalation.ts",
+      "source_location": "L15",
+      "_origin": "ast",
+      "community": 13,
+      "norm_label": "getendpoint()",
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_getendpoint"
     },
     {
       "label": "getPrimaryModel()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L7",
+      "source_location": "L19",
       "_origin": "ast",
       "community": 13,
       "norm_label": "getprimarymodel()",
-      "id": "src_lib_openrouterescalation_getprimarymodel",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_getprimarymodel"
     },
     {
       "label": "getFallbackModel()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L11",
+      "source_location": "L26",
       "_origin": "ast",
       "community": 13,
       "norm_label": "getfallbackmodel()",
-      "id": "src_lib_openrouterescalation_getfallbackmodel",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_getfallbackmodel"
     },
     {
-      "label": "getOpenRouterApiKey()",
+      "label": "getApiKey()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L19",
+      "source_location": "L41",
       "_origin": "ast",
       "community": 13,
-      "norm_label": "getopenrouterapikey()",
-      "id": "src_lib_openrouterescalation_getopenrouterapikey",
-      "community_name": "geminiEscalation.ts"
+      "norm_label": "getapikey()",
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_getapikey"
     },
     {
       "label": "isEscalationEnabled()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L23",
+      "source_location": "L47",
       "_origin": "ast",
       "community": 13,
       "norm_label": "isescalationenabled()",
-      "id": "src_lib_openrouterescalation_isescalationenabled",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_isescalationenabled"
     },
     {
       "label": "isReasoningEnabled()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L27",
+      "source_location": "L51",
       "_origin": "ast",
       "community": 13,
       "norm_label": "isreasoningenabled()",
-      "id": "src_lib_openrouterescalation_isreasoningenabled",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_isreasoningenabled"
     },
     {
       "label": "RETRYABLE_STATUSES",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L31",
+      "source_location": "L55",
       "_origin": "ast",
       "community": 13,
       "norm_label": "retryable_statuses",
-      "id": "src_lib_openrouterescalation_retryable_statuses",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_retryable_statuses"
     },
     {
       "label": "getMaxRetries()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L35",
+      "source_location": "L59",
       "_origin": "ast",
       "community": 13,
       "norm_label": "getmaxretries()",
-      "id": "src_lib_openrouterescalation_getmaxretries",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_getmaxretries"
     },
     {
       "label": "getRequestTimeoutMs()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L39",
+      "source_location": "L63",
       "_origin": "ast",
       "community": 13,
       "norm_label": "getrequesttimeoutms()",
-      "id": "src_lib_openrouterescalation_getrequesttimeoutms",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_getrequesttimeoutms"
     },
     {
       "label": "getBaseDelayMs()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L43",
+      "source_location": "L67",
       "_origin": "ast",
       "community": 13,
       "norm_label": "getbasedelayms()",
-      "id": "src_lib_openrouterescalation_getbasedelayms",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_getbasedelayms"
     },
     {
       "label": "EscalationRiskLevel",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L47",
+      "source_location": "L71",
       "_origin": "ast",
       "community": 13,
       "norm_label": "escalationrisklevel",
-      "id": "src_lib_openrouterescalation_escalationrisklevel",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_escalationrisklevel"
     },
     {
       "label": "TicketEscalationAnalysis",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L49",
+      "source_location": "L73",
       "_origin": "ast",
-      "community": 13,
+      "community": 4,
       "norm_label": "ticketescalationanalysis",
-      "id": "src_lib_openrouterescalation_ticketescalationanalysis",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "TicketCard.tsx",
+      "id": "src_lib_openrouterescalation_ticketescalationanalysis"
     },
     {
       "label": "TicketAnalysisInput",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L57",
+      "source_location": "L81",
       "_origin": "ast",
-      "community": 13,
+      "community": 4,
       "norm_label": "ticketanalysisinput",
-      "id": "src_lib_openrouterescalation_ticketanalysisinput",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "TicketCard.tsx",
+      "id": "src_lib_openrouterescalation_ticketanalysisinput"
     },
     {
       "label": "OpenRouterChoice",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L62",
+      "source_location": "L86",
       "_origin": "ast",
       "community": 13,
       "norm_label": "openrouterchoice",
-      "id": "src_lib_openrouterescalation_openrouterchoice",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_openrouterchoice"
     },
     {
       "label": "OpenRouterChatResponse",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L69",
+      "source_location": "L93",
       "_origin": "ast",
       "community": 13,
       "norm_label": "openrouterchatresponse",
-      "id": "src_lib_openrouterescalation_openrouterchatresponse",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_openrouterchatresponse"
     },
     {
       "label": "RawAnalysis",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L73",
+      "source_location": "L97",
       "_origin": "ast",
       "community": 13,
       "norm_label": "rawanalysis",
-      "id": "src_lib_openrouterescalation_rawanalysis",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_rawanalysis"
     },
     {
       "label": "analysisCache",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L81",
+      "source_location": "L105",
       "_origin": "ast",
       "community": 13,
       "norm_label": "analysiscache",
-      "id": "src_lib_openrouterescalation_analysiscache",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_analysiscache"
     },
     {
       "label": "wait()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L83",
+      "source_location": "L107",
       "_origin": "ast",
       "community": 13,
       "norm_label": "wait()",
-      "id": "src_lib_openrouterescalation_wait",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_wait"
     },
     {
       "label": "jitteredDelay()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L89",
+      "source_location": "L113",
       "_origin": "ast",
       "community": 13,
       "norm_label": "jittereddelay()",
-      "id": "src_lib_openrouterescalation_jittereddelay",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_jittereddelay"
     },
     {
       "label": "buildCacheKey()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L97",
+      "source_location": "L121",
       "_origin": "ast",
       "community": 13,
       "norm_label": "buildcachekey()",
-      "id": "src_lib_openrouterescalation_buildcachekey",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_buildcachekey"
     },
     {
       "label": "normalizeRiskLevel()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L111",
+      "source_location": "L135",
       "_origin": "ast",
       "community": 13,
       "norm_label": "normalizerisklevel()",
-      "id": "src_lib_openrouterescalation_normalizerisklevel",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_normalizerisklevel"
     },
     {
       "label": "normalizeAnalysis()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L119",
+      "source_location": "L143",
       "_origin": "ast",
       "community": 13,
       "norm_label": "normalizeanalysis()",
-      "id": "src_lib_openrouterescalation_normalizeanalysis",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_normalizeanalysis"
     },
     {
       "label": "extractContent()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L143",
+      "source_location": "L167",
       "_origin": "ast",
       "community": 13,
       "norm_label": "extractcontent()",
-      "id": "src_lib_openrouterescalation_extractcontent",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_extractcontent"
     },
     {
       "label": "parseAnalyses()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L147",
+      "source_location": "L171",
       "_origin": "ast",
       "community": 13,
       "norm_label": "parseanalyses()",
-      "id": "src_lib_openrouterescalation_parseanalyses",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_parseanalyses"
     },
     {
       "label": "buildPrompt()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L178",
+      "source_location": "L202",
       "_origin": "ast",
       "community": 13,
       "norm_label": "buildprompt()",
-      "id": "src_lib_openrouterescalation_buildprompt",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_buildprompt"
     },
     {
       "label": "callOpenRouter()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L203",
+      "source_location": "L227",
       "_origin": "ast",
       "community": 13,
       "norm_label": "callopenrouter()",
-      "id": "src_lib_openrouterescalation_callopenrouter",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_callopenrouter"
     },
     {
       "label": "analyzeEscalationRisk()",
       "file_type": "code",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L278",
+      "source_location": "L309",
       "_origin": "ast",
       "community": 13,
       "norm_label": "analyzeescalationrisk()",
-      "id": "src_lib_openrouterescalation_analyzeescalationrisk",
-      "community_name": "geminiEscalation.ts"
+      "community_name": "openrouterEscalation.ts",
+      "id": "src_lib_openrouterescalation_analyzeescalationrisk"
     },
     {
       "label": "tsconfig.json",
@@ -2068,8 +2156,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "tsconfig.json",
-      "id": "tsconfig",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig"
     },
     {
       "label": "compilerOptions",
@@ -2079,8 +2167,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "compileroptions",
-      "id": "tsconfig_compileroptions",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions"
     },
     {
       "label": "allowSyntheticDefaultImports",
@@ -2090,8 +2178,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "allowsyntheticdefaultimports",
-      "id": "tsconfig_compileroptions_allowsyntheticdefaultimports",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_allowsyntheticdefaultimports"
     },
     {
       "label": "allowJs",
@@ -2101,8 +2189,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "allowjs",
-      "id": "tsconfig_compileroptions_allowjs",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_allowjs"
     },
     {
       "label": "baseUrl",
@@ -2112,8 +2200,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "baseurl",
-      "id": "tsconfig_compileroptions_baseurl",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_baseurl"
     },
     {
       "label": "esModuleInterop",
@@ -2123,8 +2211,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "esmoduleinterop",
-      "id": "tsconfig_compileroptions_esmoduleinterop",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_esmoduleinterop"
     },
     {
       "label": "forceConsistentCasingInFileNames",
@@ -2134,8 +2222,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "forceconsistentcasinginfilenames",
-      "id": "tsconfig_compileroptions_forceconsistentcasinginfilenames",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_forceconsistentcasinginfilenames"
     },
     {
       "label": "incremental",
@@ -2145,8 +2233,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "incremental",
-      "id": "tsconfig_compileroptions_incremental",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_incremental"
     },
     {
       "label": "isolatedModules",
@@ -2156,8 +2244,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "isolatedmodules",
-      "id": "tsconfig_compileroptions_isolatedmodules",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_isolatedmodules"
     },
     {
       "label": "jsx",
@@ -2167,8 +2255,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "jsx",
-      "id": "tsconfig_compileroptions_jsx",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_jsx"
     },
     {
       "label": "lib",
@@ -2178,8 +2266,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "lib",
-      "id": "tsconfig_compileroptions_lib",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_lib"
     },
     {
       "label": "module",
@@ -2189,8 +2277,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "module",
-      "id": "tsconfig_compileroptions_module",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_module"
     },
     {
       "label": "moduleResolution",
@@ -2200,8 +2288,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "moduleresolution",
-      "id": "tsconfig_compileroptions_moduleresolution",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_moduleresolution"
     },
     {
       "label": "noEmit",
@@ -2211,8 +2299,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "noemit",
-      "id": "tsconfig_compileroptions_noemit",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_noemit"
     },
     {
       "label": "noUncheckedIndexedAccess",
@@ -2222,8 +2310,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "nouncheckedindexedaccess",
-      "id": "tsconfig_compileroptions_nouncheckedindexedaccess",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_nouncheckedindexedaccess"
     },
     {
       "label": "plugins",
@@ -2233,8 +2321,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "plugins",
-      "id": "tsconfig_compileroptions_plugins",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_plugins"
     },
     {
       "label": "paths",
@@ -2244,8 +2332,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "paths",
-      "id": "tsconfig_compileroptions_paths",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_paths"
     },
     {
       "label": "@/*",
@@ -2255,8 +2343,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "@/*",
-      "id": "tsconfig_paths",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_paths"
     },
     {
       "label": "resolveJsonModule",
@@ -2266,8 +2354,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "resolvejsonmodule",
-      "id": "tsconfig_compileroptions_resolvejsonmodule",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_resolvejsonmodule"
     },
     {
       "label": "skipLibCheck",
@@ -2277,8 +2365,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "skiplibcheck",
-      "id": "tsconfig_compileroptions_skiplibcheck",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_skiplibcheck"
     },
     {
       "label": "strict",
@@ -2288,8 +2376,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "strict",
-      "id": "tsconfig_compileroptions_strict",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_strict"
     },
     {
       "label": "target",
@@ -2299,8 +2387,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "target",
-      "id": "tsconfig_compileroptions_target",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_compileroptions_target"
     },
     {
       "label": "include",
@@ -2310,8 +2398,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "include",
-      "id": "tsconfig_include",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_include"
     },
     {
       "label": "exclude",
@@ -2321,8 +2409,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "exclude",
-      "id": "tsconfig_exclude",
-      "community_name": "compilerOptions"
+      "community_name": "compilerOptions",
+      "id": "tsconfig_exclude"
     },
     {
       "label": "README.md",
@@ -2332,8 +2420,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "readme.md",
-      "id": "readme",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme"
     },
     {
       "label": "TS Jira Dashboard",
@@ -2343,8 +2431,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "ts jira dashboard",
-      "id": "readme_ts_jira_dashboard",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_ts_jira_dashboard"
     },
     {
       "label": "Tech Stack",
@@ -2354,8 +2442,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "tech stack",
-      "id": "readme_tech_stack",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_tech_stack"
     },
     {
       "label": "Requirements",
@@ -2365,8 +2453,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "requirements",
-      "id": "readme_requirements",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_requirements"
     },
     {
       "label": "Environment",
@@ -2376,8 +2464,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "environment",
-      "id": "readme_environment",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_environment"
     },
     {
       "label": "Install",
@@ -2387,8 +2475,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "install",
-      "id": "readme_install",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_install"
     },
     {
       "label": "Run Locally",
@@ -2398,8 +2486,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "run locally",
-      "id": "readme_run_locally",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_run_locally"
     },
     {
       "label": "Useful Scripts",
@@ -2409,8 +2497,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "useful scripts",
-      "id": "readme_useful_scripts",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_useful_scripts"
     },
     {
       "label": "Routes",
@@ -2420,8 +2508,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "routes",
-      "id": "readme_routes",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_routes"
     },
     {
       "label": "Project Structure",
@@ -2431,8 +2519,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "project structure",
-      "id": "readme_project_structure",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_project_structure"
     },
     {
       "label": "AI Escalation Triage",
@@ -2442,8 +2530,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "ai escalation triage",
-      "id": "readme_ai_escalation_triage",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_ai_escalation_triage"
     },
     {
       "label": "Jira Snapshot History",
@@ -2453,8 +2541,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "jira snapshot history",
-      "id": "readme_jira_snapshot_history",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_jira_snapshot_history"
     },
     {
       "label": "UI Design & Theming",
@@ -2464,8 +2552,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "ui design & theming",
-      "id": "readme_ui_design_theming",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_ui_design_theming"
     },
     {
       "label": "Ticket Fields Displayed",
@@ -2475,8 +2563,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "ticket fields displayed",
-      "id": "readme_ticket_fields_displayed",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_ticket_fields_displayed"
     },
     {
       "label": "Graphify Project Graph",
@@ -2486,8 +2574,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "graphify project graph",
-      "id": "readme_graphify_project_graph",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_graphify_project_graph"
     },
     {
       "label": "Verification",
@@ -2497,8 +2585,8 @@
       "_origin": "ast",
       "community": 12,
       "norm_label": "verification",
-      "id": "readme_verification",
-      "community_name": "TS Jira Dashboard"
+      "community_name": "TS Jira Dashboard",
+      "id": "readme_verification"
     }
   ],
   "links": [
@@ -3387,7 +3475,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L259",
+      "source_location": "L409",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation",
@@ -3437,6 +3525,16 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
+      "source_location": "L360",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation",
+      "target": "scripts_test_escalation_runlivehfmodel"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
       "source_location": "L138",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -3457,6 +3555,26 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
+      "source_location": "L375",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation",
+      "target": "scripts_test_escalation_testhuggingfacelive"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L266",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation",
+      "target": "scripts_test_escalation_testhuggingfacesuccess"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
       "source_location": "L156",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -3467,7 +3585,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L186",
+      "source_location": "L193",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation",
@@ -3555,6 +3673,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
+      "source_location": "L364",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation_runlivehfmodel",
+      "target": "scripts_test_escalation_makeissues"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
       "source_location": "L143",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -3577,7 +3706,18 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L171",
+      "source_location": "L326",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation_testhuggingfacesuccess",
+      "target": "scripts_test_escalation_makeissues"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L173",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_testopenrouter503fallback",
@@ -3588,7 +3728,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L239",
+      "source_location": "L246",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_testopenroutersuccess",
@@ -3621,6 +3761,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
+      "source_location": "L365",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation_runlivehfmodel",
+      "target": "scripts_test_escalation_makemockgetcomments"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
       "source_location": "L144",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -3632,7 +3783,18 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L172",
+      "source_location": "L327",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation_testhuggingfacesuccess",
+      "target": "scripts_test_escalation_makemockgetcomments"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L174",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_testopenrouter503fallback",
@@ -3643,11 +3805,22 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L240",
+      "source_location": "L247",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_testopenroutersuccess",
       "target": "scripts_test_escalation_makemockgetcomments"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L367",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation_runlivehfmodel",
+      "target": "scripts_test_escalation_assertequal"
     },
     {
       "relation": "calls",
@@ -3676,7 +3849,18 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L174",
+      "source_location": "L333",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation_testhuggingfacesuccess",
+      "target": "scripts_test_escalation_assertequal"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L176",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_testopenrouter503fallback",
@@ -3687,11 +3871,22 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L243",
+      "source_location": "L250",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_testopenroutersuccess",
       "target": "scripts_test_escalation_assertequal"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L368",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation_runlivehfmodel",
+      "target": "scripts_test_escalation_assert"
     },
     {
       "relation": "calls",
@@ -3720,7 +3915,18 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L242",
+      "source_location": "L329",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation_testhuggingfacesuccess",
+      "target": "scripts_test_escalation_assert"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L249",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_testopenroutersuccess",
@@ -3753,7 +3959,18 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L175",
+      "source_location": "L334",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation_testhuggingfacesuccess",
+      "target": "scripts_test_escalation_requirethree"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L177",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_testopenrouter503fallback",
@@ -3764,7 +3981,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L244",
+      "source_location": "L251",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_testopenroutersuccess",
@@ -3775,7 +3992,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L261",
+      "source_location": "L411",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_main",
@@ -3797,7 +4014,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L262",
+      "source_location": "L412",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_main",
@@ -3819,7 +4036,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L263",
+      "source_location": "L413",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_main",
@@ -3830,7 +4047,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L172",
+      "source_location": "L174",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_testopenrouter503fallback",
@@ -3841,7 +4058,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L264",
+      "source_location": "L414",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_main",
@@ -3852,11 +4069,66 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "scripts/test-escalation.ts",
-      "source_location": "L240",
+      "source_location": "L247",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "scripts_test_escalation_testopenroutersuccess",
       "target": "src_lib_openrouterescalation_analyzeescalationrisk"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L415",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation_main",
+      "target": "scripts_test_escalation_testhuggingfacesuccess"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L327",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation_testhuggingfacesuccess",
+      "target": "src_lib_openrouterescalation_analyzeescalationrisk"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L365",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation_runlivehfmodel",
+      "target": "src_lib_openrouterescalation_analyzeescalationrisk"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L395",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation_testhuggingfacelive",
+      "target": "scripts_test_escalation_runlivehfmodel"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-escalation.ts",
+      "source_location": "L416",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "scripts_test_escalation_main",
+      "target": "scripts_test_escalation_testhuggingfacelive"
     },
     {
       "relation": "contains",
@@ -4470,7 +4742,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L210",
+      "source_location": "L234",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_callopenrouter",
@@ -4481,7 +4753,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L152",
+      "source_location": "L176",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_parseanalyses",
@@ -4901,7 +5173,7 @@
       "context": "field",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L58",
+      "source_location": "L82",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_ticketanalysisinput",
@@ -4912,7 +5184,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L4",
+      "source_location": "L5",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -4923,7 +5195,7 @@
       "context": "type",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L10",
+      "source_location": "L12",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore_jirasnapshotrow",
@@ -4945,7 +5217,7 @@
       "context": "field",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L59",
+      "source_location": "L83",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_ticketanalysisinput",
@@ -4956,7 +5228,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L4",
+      "source_location": "L5",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5326,7 +5598,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L110",
+      "source_location": "L134",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5336,7 +5608,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L30",
+      "source_location": "L32",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5346,7 +5618,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L126",
+      "source_location": "L154",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5356,7 +5628,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L131",
+      "source_location": "L159",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5366,7 +5638,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L148",
+      "source_location": "L176",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5376,7 +5648,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L38",
+      "source_location": "L40",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5386,7 +5658,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L16",
+      "source_location": "L18",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5396,7 +5668,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L10",
+      "source_location": "L12",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5406,7 +5678,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L22",
+      "source_location": "L24",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5416,7 +5688,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L114",
+      "source_location": "L140",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5426,7 +5698,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L51",
+      "source_location": "L53",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5436,7 +5708,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L73",
+      "source_location": "L95",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5446,7 +5718,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L85",
+      "source_location": "L107",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5456,11 +5728,11 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L6",
+      "source_location": "L86",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
-      "target": "src_lib_jirasnapshotstore_snapshot_dir"
+      "target": "src_lib_jirasnapshotstore_serializesnapshotmutation"
     },
     {
       "relation": "contains",
@@ -5470,13 +5742,33 @@
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
+      "target": "src_lib_jirasnapshotstore_snapshot_dir"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/jiraSnapshotStore.ts",
+      "source_location": "L8",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_jirasnapshotstore",
       "target": "src_lib_jirasnapshotstore_snapshot_file"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L68",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_jirasnapshotstore",
+      "target": "src_lib_jirasnapshotstore_snapshotmutationqueue"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/jiraSnapshotStore.ts",
+      "source_location": "L70",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore",
@@ -5487,18 +5779,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L111",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_jirasnapshotstore_clearjirasnapshots",
-      "target": "src_lib_jirasnapshotstore_createemptysnapshotfile"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L65",
+      "source_location": "L67",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore_readsnapshotfile",
@@ -5509,7 +5790,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L56",
+      "source_location": "L58",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore_readsnapshotfile",
@@ -5520,7 +5801,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L127",
+      "source_location": "L155",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore_getjirasnapshotrows",
@@ -5531,7 +5812,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L132",
+      "source_location": "L160",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore_getjirasnapshotsummary",
@@ -5542,7 +5823,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L149",
+      "source_location": "L177",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore_getlastsnapshotcleartime",
@@ -5553,62 +5834,40 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L115",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_jirasnapshotstore_prunejirasnapshots",
-      "target": "src_lib_jirasnapshotstore_readsnapshotfile"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L91",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_jirasnapshotstore_savecategorysnapshot",
-      "target": "src_lib_jirasnapshotstore_readsnapshotfile"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L111",
+      "source_location": "L135",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore_clearjirasnapshots",
-      "target": "src_lib_jirasnapshotstore_writesnapshotfile"
+      "target": "src_lib_jirasnapshotstore_serializesnapshotmutation"
     },
     {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L119",
+      "source_location": "L141",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore_prunejirasnapshots",
-      "target": "src_lib_jirasnapshotstore_writesnapshotfile"
+      "target": "src_lib_jirasnapshotstore_serializesnapshotmutation"
     },
     {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L104",
+      "source_location": "L112",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore_savecategorysnapshot",
-      "target": "src_lib_jirasnapshotstore_writesnapshotfile"
+      "target": "src_lib_jirasnapshotstore_serializesnapshotmutation"
     },
     {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L128",
+      "source_location": "L156",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore_getjirasnapshotrows",
@@ -5619,39 +5878,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L133",
+      "source_location": "L161",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_jirasnapshotstore_getjirasnapshotsummary",
       "target": "src_lib_jirasnapshotstore_removeexpiredrows"
     },
     {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L116",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_jirasnapshotstore_prunejirasnapshots",
-      "target": "src_lib_jirasnapshotstore_removeexpiredrows"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/jiraSnapshotStore.ts",
-      "source_location": "L92",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_jirasnapshotstore_savecategorysnapshot",
-      "target": "src_lib_jirasnapshotstore_removeexpiredrows"
-    },
-    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L81",
+      "source_location": "L105",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5661,7 +5898,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L278",
+      "source_location": "L309",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5671,7 +5908,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L97",
+      "source_location": "L121",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5681,7 +5918,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L178",
+      "source_location": "L202",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5691,7 +5928,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L203",
+      "source_location": "L227",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5701,7 +5938,17 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L47",
+      "source_location": "L8",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_openrouterescalation",
+      "target": "src_lib_openrouterescalation_escalationprovider"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/openrouterEscalation.ts",
+      "source_location": "L71",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5711,7 +5958,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L143",
+      "source_location": "L167",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5721,7 +5968,17 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L43",
+      "source_location": "L41",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_openrouterescalation",
+      "target": "src_lib_openrouterescalation_getapikey"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/openrouterEscalation.ts",
+      "source_location": "L67",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5731,7 +5988,17 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L11",
+      "source_location": "L15",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_openrouterescalation",
+      "target": "src_lib_openrouterescalation_getendpoint"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/openrouterEscalation.ts",
+      "source_location": "L26",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5741,7 +6008,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L35",
+      "source_location": "L59",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5755,23 +6022,23 @@
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
-      "target": "src_lib_openrouterescalation_getopenrouterapikey"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L7",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_openrouterescalation",
       "target": "src_lib_openrouterescalation_getprimarymodel"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L39",
+      "source_location": "L10",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_openrouterescalation",
+      "target": "src_lib_openrouterescalation_getprovider"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/openrouterEscalation.ts",
+      "source_location": "L63",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5781,7 +6048,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L23",
+      "source_location": "L47",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5791,7 +6058,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L27",
+      "source_location": "L51",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5801,7 +6068,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L89",
+      "source_location": "L113",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5811,7 +6078,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L119",
+      "source_location": "L143",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5821,7 +6088,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L111",
+      "source_location": "L135",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5831,7 +6098,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L69",
+      "source_location": "L93",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5841,7 +6108,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L62",
+      "source_location": "L86",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5851,7 +6118,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L147",
+      "source_location": "L171",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5861,7 +6128,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L73",
+      "source_location": "L97",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5871,7 +6138,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L31",
+      "source_location": "L55",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5881,7 +6148,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L57",
+      "source_location": "L81",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5891,7 +6158,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L49",
+      "source_location": "L73",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5901,7 +6168,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L83",
+      "source_location": "L107",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation",
@@ -5912,7 +6179,73 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L299",
+      "source_location": "L237",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_openrouterescalation_callopenrouter",
+      "target": "src_lib_openrouterescalation_getprovider"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/openrouterEscalation.ts",
+      "source_location": "L42",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_openrouterescalation_getapikey",
+      "target": "src_lib_openrouterescalation_getprovider"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/openrouterEscalation.ts",
+      "source_location": "L16",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_openrouterescalation_getendpoint",
+      "target": "src_lib_openrouterescalation_getprovider"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/openrouterEscalation.ts",
+      "source_location": "L27",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_openrouterescalation_getfallbackmodel",
+      "target": "src_lib_openrouterescalation_getprovider"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/openrouterEscalation.ts",
+      "source_location": "L20",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_openrouterescalation_getprimarymodel",
+      "target": "src_lib_openrouterescalation_getprovider"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/openrouterEscalation.ts",
+      "source_location": "L238",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_openrouterescalation_callopenrouter",
+      "target": "src_lib_openrouterescalation_getendpoint"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/openrouterEscalation.ts",
+      "source_location": "L330",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_analyzeescalationrisk",
@@ -5923,7 +6256,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L308",
+      "source_location": "L339",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_analyzeescalationrisk",
@@ -5934,18 +6267,18 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L207",
+      "source_location": "L231",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_callopenrouter",
-      "target": "src_lib_openrouterescalation_getopenrouterapikey"
+      "target": "src_lib_openrouterescalation_getapikey"
     },
     {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L209",
+      "source_location": "L233",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_callopenrouter",
@@ -5956,7 +6289,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L226",
+      "source_location": "L253",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_callopenrouter",
@@ -5967,7 +6300,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L213",
+      "source_location": "L239",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_callopenrouter",
@@ -5978,7 +6311,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L235",
+      "source_location": "L266",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_callopenrouter",
@@ -5989,7 +6322,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L90",
+      "source_location": "L114",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_jittereddelay",
@@ -6000,7 +6333,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L306",
+      "source_location": "L337",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_analyzeescalationrisk",
@@ -6011,7 +6344,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L260",
+      "source_location": "L291",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_callopenrouter",
@@ -6022,7 +6355,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L260",
+      "source_location": "L291",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_callopenrouter",
@@ -6033,7 +6366,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L284",
+      "source_location": "L315",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_analyzeescalationrisk",
@@ -6044,7 +6377,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L138",
+      "source_location": "L162",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_normalizeanalysis",
@@ -6055,7 +6388,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L240",
+      "source_location": "L271",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_callopenrouter",
@@ -6066,7 +6399,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L242",
+      "source_location": "L273",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_callopenrouter",
@@ -6077,7 +6410,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L221",
+      "source_location": "L244",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_callopenrouter",
@@ -6088,7 +6421,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/openrouterEscalation.ts",
-      "source_location": "L299",
+      "source_location": "L330",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_openrouterescalation_analyzeescalationrisk",
@@ -6476,5 +6809,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "28adc5ea30af9fc82c2144a0f17b11eef9f7a229"
+  "built_at_commit": "cb7faead11763f1cd811c83e0bf1ab6fa431c8b3"
 }

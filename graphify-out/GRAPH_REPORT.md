@@ -1,15 +1,15 @@
-# Graph Report - .  (2026-07-03)
+# Graph Report - .  (2026-07-29)
 
 ## Corpus Check
 - cluster-only mode — file stats not available
 
 ## Summary
-- 227 nodes · 379 edges · 17 communities (15 shown, 2 thin omitted)
+- 235 nodes · 402 edges · 17 communities (15 shown, 2 thin omitted)
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 7 edges (avg confidence: 0.54)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `28adc5ea`
+- Built from commit: `cb7faead`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -18,26 +18,26 @@
 - [[_COMMUNITY_jiraClient.ts|jiraClient.ts]]
 - [[_COMMUNITY_package.json|package.json]]
 - [[_COMMUNITY_page.tsx|page.tsx]]
-- [[_COMMUNITY_cache.ts|cache.ts]]
-- [[_COMMUNITY_scripts|scripts]]
+- [[_COMMUNITY_TicketCard.tsx|TicketCard.tsx]]
+- [[_COMMUNITY_jiraSnapshotStore.ts|jiraSnapshotStore.ts]]
 - [[_COMMUNITY_layout.tsx|layout.tsx]]
 - [[_COMMUNITY_next.config.ts|next.config.ts]]
 - [[_COMMUNITY_TS Jira Dashboard|TS Jira Dashboard]]
-- [[_COMMUNITY_geminiEscalation.ts|geminiEscalation.ts]]
+- [[_COMMUNITY_openrouterEscalation.ts|openrouterEscalation.ts]]
 - [[_COMMUNITY_test-theme.ts|test-theme.ts]]
 - [[_COMMUNITY_test-escalation.ts|test-escalation.ts]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `compilerOptions` - 20 edges
-2. `TS Jira Dashboard` - 15 edges
-3. `callOpenRouter()` - 13 edges
-4. `analyzeEscalationRisk()` - 12 edges
+2. `callOpenRouter()` - 15 edges
+3. `TS Jira Dashboard` - 15 edges
+4. `analyzeEscalationRisk()` - 14 edges
 5. `FormattedIssue` - 9 edges
 6. `scripts` - 8 edges
 7. `testHeuristics()` - 8 edges
 8. `testDisabledOpenRouter()` - 8 edges
 9. `testOpenRouterSuccess()` - 8 edges
-10. `runScheduledJiraRefresh()` - 8 edges
+10. `testHuggingFaceSuccess()` - 8 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `CategoryPage()` --calls--> `analyzeEscalationRisk()`  [EXTRACTED]
@@ -62,7 +62,7 @@ Nodes (23): compilerOptions, allowJs, allowSyntheticDefaultImports, baseUrl, esM
 
 ### Community 1 - "jiraClient.ts"
 Cohesion: 0.11
-Nodes (27): CATEGORIES, Category, CategoryCacheMeta, CurrentUser, DashboardTile, formatArrayField(), formatIssue(), getActionableItems() (+19 more)
+Nodes (26): CATEGORIES, CategoryCacheMeta, CurrentUser, DashboardTile, formatArrayField(), formatIssue(), getActionableItems(), getIssueComments() (+18 more)
 
 ### Community 2 - "package.json"
 Cohesion: 0.07
@@ -72,48 +72,48 @@ Nodes (26): dependencies, next, react, react-dom, devDependencies, eslint, @esli
 Cohesion: 0.14
 Nodes (18): CategoryPage(), CategoryPageProps, categoryIcons, DashboardPage(), RefreshCountdown(), RefreshCountdownProps, getSystemTheme(), getSystemThemeSnapshot() (+10 more)
 
-### Community 4 - "cache.ts"
-Cohesion: 0.38
-Nodes (5): GET(), cache, CacheEntry, clearCache(), getCacheMeta()
+### Community 4 - "TicketCard.tsx"
+Cohesion: 0.31
+Nodes (8): getRiskLabel(), TicketCard(), TicketCardProps, FormattedIssue, TicketCommentContext, JiraSnapshotRow, TicketAnalysisInput, TicketEscalationAnalysis
 
-### Community 5 - "scripts"
-Cohesion: 0.17
-Nodes (22): formatDate(), HistoryPage(), register(), refreshAllCategories(), isSunday(), runScheduledJiraRefresh(), startJiraRefreshScheduler(), clearJiraSnapshots() (+14 more)
+### Community 5 - "jiraSnapshotStore.ts"
+Cohesion: 0.10
+Nodes (29): formatDate(), HistoryPage(), GET(), register(), cache, CacheEntry, clearCache(), setCache() (+21 more)
 
 ### Community 12 - "TS Jira Dashboard"
 Cohesion: 0.12
 Nodes (15): AI Escalation Triage, Environment, Graphify Project Graph, Install, Jira Snapshot History, Project Structure, Requirements, Routes (+7 more)
 
-### Community 13 - "geminiEscalation.ts"
-Cohesion: 0.10
-Nodes (33): getRiskLabel(), TicketCard(), TicketCardProps, getLocalHeuristicAnalysis(), FormattedIssue, TicketCommentContext, JiraSnapshotRow, analysisCache (+25 more)
+### Community 13 - "openrouterEscalation.ts"
+Cohesion: 0.13
+Nodes (28): getLocalHeuristicAnalysis(), analysisCache, analyzeEscalationRisk(), buildCacheKey(), buildPrompt(), callOpenRouter(), EscalationProvider, EscalationRiskLevel (+20 more)
 
 ### Community 15 - "test-theme.ts"
 Cohesion: 0.15
 Nodes (10): css, cssPath, darkBlock, darkThumb, hero, lightOverride, prefersDark, reducedMotion (+2 more)
 
 ### Community 16 - "test-escalation.ts"
-Cohesion: 0.53
-Nodes (11): assert(), assertEqual(), main(), makeComments(), makeIssues(), makeMockGetComments(), requireThree(), testDisabledOpenRouter() (+3 more)
+Cohesion: 0.48
+Nodes (14): assert(), assertEqual(), main(), makeComments(), makeIssues(), makeMockGetComments(), requireThree(), runLiveHfModel() (+6 more)
 
 ## Knowledge Gaps
-- **97 isolated node(s):** `CategoryPageProps`, `openSans`, `metadata`, `categoryIcons`, `nextConfig` (+92 more)
+- **99 isolated node(s):** `CategoryPageProps`, `openSans`, `metadata`, `categoryIcons`, `nextConfig` (+94 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **2 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `FormattedIssue` connect `geminiEscalation.ts` to `test-escalation.ts`, `jiraClient.ts`, `scripts`?**
-  _High betweenness centrality (0.019) - this node is a cross-community bridge._
-- **Why does `analyzeEscalationRisk()` connect `geminiEscalation.ts` to `test-escalation.ts`, `page.tsx`?**
-  _High betweenness centrality (0.011) - this node is a cross-community bridge._
+- **Why does `FormattedIssue` connect `TicketCard.tsx` to `test-escalation.ts`, `jiraClient.ts`, `openrouterEscalation.ts`, `jiraSnapshotStore.ts`?**
+  _High betweenness centrality (0.023) - this node is a cross-community bridge._
+- **Why does `analyzeEscalationRisk()` connect `openrouterEscalation.ts` to `test-escalation.ts`, `page.tsx`?**
+  _High betweenness centrality (0.014) - this node is a cross-community bridge._
 - **What connects `CategoryPageProps`, `openSans`, `metadata` to the rest of the system?**
-  _97 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _99 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `compilerOptions` be split into smaller, more focused modules?**
   _Cohesion score 0.08333333333333333 - nodes in this community are weakly interconnected._
 - **Should `jiraClient.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.10846560846560846 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.11396011396011396 - nodes in this community are weakly interconnected._
 - **Should `package.json` be split into smaller, more focused modules?**
   _Cohesion score 0.07407407407407407 - nodes in this community are weakly interconnected._
 - **Should `page.tsx` be split into smaller, more focused modules?**

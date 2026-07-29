@@ -35,9 +35,9 @@
     "semantic_hash": "971fce7647c15f0dc1c06d17226ced31"
   },
   "next-env.d.ts": {
-    "mtime": 1783013132.5103796,
-    "ast_hash": "2a74d3909800ca5467fa83b0ab4a4890",
-    "semantic_hash": "2a74d3909800ca5467fa83b0ab4a4890"
+    "mtime": 1784824997.965921,
+    "ast_hash": "d0f8375ae1199dc7acd3977fc33b78b8",
+    "semantic_hash": ""
   },
   "next.config.ts": {
     "mtime": 1783003979.6999254,
@@ -80,8 +80,8 @@
     "semantic_hash": ""
   },
   "src/lib/jiraSnapshotStore.ts": {
-    "mtime": 1783007606.3911464,
-    "ast_hash": "f75a74fdad290c6f293e9ecd168327f3",
+    "mtime": 1784824858.3472846,
+    "ast_hash": "cccc19c6f7b73335c86b9b73fc79d0ad",
     "semantic_hash": ""
   },
   "README.md": {
@@ -115,8 +115,8 @@
     "semantic_hash": ""
   },
   "scripts/test-escalation.ts": {
-    "mtime": 1783025527.5545585,
-    "ast_hash": "81c8e04fdd0d7ae12b1f76c6ae248831",
+    "mtime": 1785333143.944034,
+    "ast_hash": "7fbc583a337f699a954fa8bef9d45ba5",
     "semantic_hash": ""
   },
   "scripts/test-theme.ts": {
@@ -130,8 +130,28 @@
     "semantic_hash": ""
   },
   "src/lib/openrouterEscalation.ts": {
-    "mtime": 1783025503.2319357,
-    "ast_hash": "6ad144a141b3c7f90c3ac6820e433718",
+    "mtime": 1785333143.9329507,
+    "ast_hash": "aabdceb0c5f123931e953a24205bf803",
+    "semantic_hash": ""
+  },
+  ".vercel-deploy-args-oneline.json": {
+    "mtime": 1783715865.4370341,
+    "ast_hash": "fb8309c4c251a77377acc82af8f7d70a",
+    "semantic_hash": ""
+  },
+  ".vercel-deploy-args-ready.json": {
+    "mtime": 1783704600.2637708,
+    "ast_hash": "b1d16892cee5b4caa5f19f76911c24fd",
+    "semantic_hash": ""
+  },
+  ".vercel-deploy-payload.json": {
+    "mtime": 1783703786.871203,
+    "ast_hash": "fb8309c4c251a77377acc82af8f7d70a",
+    "semantic_hash": ""
+  },
+  ".vercel-mcp-args.json": {
+    "mtime": 1783715950.538435,
+    "ast_hash": "fb8309c4c251a77377acc82af8f7d70a",
     "semantic_hash": ""
   }
 }

@@ -249,6 +249,7 @@ scripts/
   test-slack-signature.ts       Slack signature verification unit tests
   test-llm-client.ts            Anthropic/OpenAI-compatible request+response translation, draft/triage provider independence, pickVariant tests
   test-user-jira-tokens.ts      Token encryption round-trip/tamper detection, per-user registration/lookup/list/remove tests
+  test-google-sheets-writer.ts  Apps Script webhook append/batch-append, graceful failure (HTTP error, non-JSON, ok:false) tests
 ```
 
 ## AI Escalation Triage
@@ -306,7 +307,7 @@ Each issue's detail drawer has a "Draft follow-up" button (draft-then-confirm, n
 
 1. Clicking it calls `POST /api/tickets/[key]/followup/draft`, which asks the active **draft** provider (Claude/Anthropic by default - see [Follow-Up Draft Generation](#follow-up-draft-generation)) to draft a short, professional follow-up addressed to the right team (based on the ticket's status, `pending_reason`, and any OCR'd attachment text), falling back to a plain template message if AI drafting is disabled, unavailable, or fails.
 2. The draft appears in an editable text box. Nothing is sent until you click "Send."
-3. Sending calls `POST /api/tickets/[key]/followup/send`, which posts the (possibly edited) text as a real Jira comment via `addFollowUpComment()`, then records an audit entry and starts a cooldown (`FOLLOWUP_COOLDOWN_HOURS`, default 24h) that blocks another send on the same ticket, enforced server-side regardless of what the UI shows.
+3. Sending calls `POST /api/tickets/[key]/followup/send`, which posts the (possibly edited) text as a real Jira comment via `addFollowUpComment()`, then records an audit entry and starts a cooldown (`FOLLOWUP_COOLDOWN_HOURS`, default 24h) that blocks another send on the same ticket, enforced server-side regardless of what the UI shows. It also logs the same send to the "Follow-Up Log" Google Sheet tab if configured - see [Follow-Up Log (Google Sheet)](#follow-up-log-google-sheet).
 
 **This app still has no authentication.** Jira access defaults to one shared service-account token, so anyone who can reach a deployed URL could trigger a real Jira comment - see [Per-Team-Member Jira Tokens](#per-team-member-jira-tokens) for how a *ticket's own credentials* can now override that default, which is a routing improvement, not a login system. Enable [Vercel Deployment Protection](https://vercel.com/docs/deployment-protection) (password or SSO) before deploying this feature anywhere reachable beyond your own machine.
 
@@ -319,6 +320,14 @@ Each issue's detail drawer has a "Draft follow-up" button (draft-then-confirm, n
 **Registration** (`registerUserJiraToken()`) never trusts a pasted token blindly: it calls Jira's own `/myself` with the *exact* email+token pair being registered, and only stores it if Jira accepts it - the stored account id, display name, and email all come back from Jira itself, not from the form. **Tokens are encrypted at rest** (`src/lib/tokenCrypto.ts`, AES-256-GCM, keyed by `TOKEN_ENCRYPTION_KEY` - generate with `openssl rand -base64 32`) before being written to Redis; the plaintext token is never stored and is not shown again after registration. If a stored token later turns out to be expired or revoked (a 401/403 from Jira when actually posting), the send route logs a warning, falls back to the shared service account for that one request, and reports `usedFallbackAccount: true` in its response rather than failing the send outright.
 
 **To create a token**: log in to [id.atlassian.com/manage-profile/security/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens) → "Create API token with scopes" → name it, set an expiration (1-365 days), select Jira, grant scopes covering reading/writing issues and comments plus reading your own profile → Create → copy it → paste it into `/settings/jira-tokens`. A token that expires simply stops working at that date; re-registering with a fresh token is the only way to renew it - there's no expiry-tracking or renewal-reminder mechanism yet.
+
+## Follow-Up Log (Google Sheet)
+
+Every follow-up send (`POST /api/tickets/[key]/followup/send`, any kind - manual, SLA, CP escalation, product-wait, closure) appends a row to a "Follow-Up Log" tab in the same Google Sheet the [Team Sheet Backlog](#project-structure) reads from - a durable, human-readable record independent of Redis, since the Redis-backed audit log (`src/lib/followupAudit.ts`) is deliberately capped (50 entries) and TTL'd (180 days) to stay within a memory-limited free Redis tier. The Sheet is never the operational source of truth for cadence/cooldown logic (that stays in Redis, which is fine to clear or let entries age out of) - it exists purely so that record is never actually lost.
+
+**This is a separate, write-capable path from `src/lib/googleSheetBacklog.ts`**, which only reads the sheet via its public CSV export URL and has no authentication at all. Writing here uses a **Google Apps Script Web App** bound to the spreadsheet (`GOOGLE_SHEET_WEBHOOK_URL`) rather than a Google Cloud service account - deliberately, since a service account needs IAM Admin access to create, and this doesn't need any Google Cloud Console access at all. Anyone who can already edit the sheet can set it up directly from the Sheets UI (Extensions -> Apps Script -> paste a ~10-line `doPost` handler -> Deploy as a Web App with "Execute as: Me" / "Who has access: Anyone" -> copy the resulting `/exec` URL) - see the exact snippet and steps in `.env.example`. `src/lib/googleSheetsWriter.ts` is then just one plain `fetch()` POST to that URL - no OAuth, no signing, no API client library.
+
+Logging is best-effort and never blocks or fails a send: `appendFollowUpLogRow`/`appendFollowUpLogRows` return `false` (never throw) on missing config, an HTTP failure, or a non-JSON response (Apps Script redirects to a Google sign-in page instead of running the script if the deployment's access level isn't actually "Anyone" - checked explicitly, since that would otherwise look like an empty success). Calls are `await`ed (not fire-and-forget) specifically because a serverless function's background promises aren't guaranteed to finish once the response is sent - a "durable" log that can silently lose writes on every cold response would defeat its own purpose.
 
 ## Follow-Up Draft Generation
 

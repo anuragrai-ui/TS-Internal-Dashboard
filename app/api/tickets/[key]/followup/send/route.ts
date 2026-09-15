@@ -6,6 +6,7 @@ import type { FollowUpAuditEntry, FollowUpKind } from "@/lib/followupAudit";
 import { followUpAuditLogKey, followUpCooldownKey, trimAndExpireAuditLog } from "@/lib/followupAudit";
 import { addFollowUpComment, getIssueByKey, JiraRequestError, transitionIssueToDone } from "@/lib/jiraClient";
 import type { JiraCredentials } from "@/lib/jiraClient";
+import { appendFollowUpLogRow } from "@/lib/googleSheetsWriter";
 import { checkExternalMessageSafety } from "@/lib/messageSafety";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
 import { getJiraCredentialsForAccount } from "@/lib/userJiraTokens";
@@ -200,6 +201,21 @@ export async function POST(
         console.warn(`Follow-up audit log write failed for ${key}; comment was posted successfully.`, error);
       }
     }
+
+    // Durable record independent of Redis (which is capped/TTL'd for memory
+    // reasons - see followupAudit.ts). Awaited, not fire-and-forget - a
+    // serverless function's background promises aren't guaranteed to finish
+    // once the response is sent, which would silently defeat the point of a
+    // durable log. appendFollowUpLogRow never throws (returns false on any
+    // failure), so this can't fail or block the response either way.
+    await appendFollowUpLogRow({
+      issueKey: key,
+      jiraCommentId: comment.id,
+      kind,
+      postedAt,
+      postedText: text,
+      status: "sent",
+    });
 
     // Every "closing" kind (the SLA stage-2 final-notice, a stage-3 retry
     // after a previous close attempt didn't take, or a closure-candidate

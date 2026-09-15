@@ -1,11 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { RefreshCountdown } from "@/components/RefreshCountdown";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { TicketCard } from "@/components/TicketCard";
-import { analyzeEscalationRisk } from "@/lib/openrouterEscalation";
-import { getCategoryCacheMeta, getCategoryIssues } from "@/lib/jiraClient";
+import { Icon } from "@/components/Icon";
+import { IssueWorkspace } from "@/components/IssueWorkspace";
+import { KpiStrip } from "@/components/KpiStrip";
+import {
+  countTicketsNeedingFollowup,
+  getSheetBacklog,
+} from "@/lib/googleSheetBacklog";
+import { toIssueRow } from "@/lib/issueRow";
+
+import type { KpiItem } from "@/components/KpiStrip";
+import type {
+  SheetBacklogTicket,
+  SheetFollowup,
+} from "@/lib/googleSheetBacklog";
+import type { TicketEscalationAnalysis } from "@/lib/openrouterEscalation";
 
 export const dynamic = "force-dynamic";
 
@@ -15,116 +25,148 @@ interface CategoryPageProps {
   }>;
 }
 
+interface SheetCategory {
+  description: string;
+  matches: (ticket: SheetBacklogTicket) => boolean;
+  title: string;
+}
+
+const WAITING_STATUSES = new Set([
+  "waiting for client",
+  "waiting for operations",
+  "waiting for product",
+]);
+
+const SHEET_CATEGORIES: Record<string, SheetCategory> = {
+  actionable: {
+    description:
+      "Open TS tickets requiring team action, including To-do, In Progress, Reopened, and TS review work.",
+    matches: (ticket) =>
+      !ticket.resolved &&
+      !WAITING_STATUSES.has(ticket.issue.status?.trim().toLowerCase() ?? ""),
+    title: "Actionable Items",
+  },
+  "waiting-product": {
+    description: "TS tickets currently waiting for Product.",
+    matches: (ticket) =>
+      !ticket.resolved &&
+      ticket.issue.status?.trim().toLowerCase() === "waiting for product",
+    title: "Waiting for Product",
+  },
+  "waiting-client": {
+    description: "TS tickets currently waiting for Client.",
+    matches: (ticket) =>
+      !ticket.resolved &&
+      ticket.issue.status?.trim().toLowerCase() === "waiting for client",
+    title: "Waiting for Client",
+  },
+  "waiting-operations": {
+    description: "TS tickets currently waiting for Operations.",
+    matches: (ticket) =>
+      !ticket.resolved &&
+      ticket.issue.status?.trim().toLowerCase() === "waiting for operations",
+    title: "Waiting for Operations",
+  },
+};
+
+function followupAnalysis(
+  followup: SheetFollowup | undefined,
+): TicketEscalationAnalysis | undefined {
+  if (!followup?.aiInsight && !followup?.recommendedAction) {
+    return undefined;
+  }
+
+  const urgent = /urgent|immediate|overdue|ready/i.test(followup.followupState);
+
+  return {
+    key: followup.key,
+    next_action: followup.recommendedAction || "Review the scheduled follow-up draft.",
+    reason: followup.aiInsight || "A scheduled follow-up is ready for review.",
+    risk_level: urgent ? "immediate" : "watch",
+    risk_score: urgent ? 90 : 60,
+  };
+}
+
 export default async function CategoryPage({
   params,
 }: CategoryPageProps): Promise<React.ReactElement> {
   const { categoryKey } = await params;
-  const [category, issues] = await getCategoryIssues(categoryKey);
+  const category = SHEET_CATEGORIES[categoryKey];
 
   if (!category) {
     notFound();
   }
 
-  const meta = getCategoryCacheMeta(categoryKey);
-  const count = issues.length;
-  const analyses = await analyzeEscalationRisk(issues);
-  const analysesByKey = new Map(analyses.map((analysis) => [analysis.key, analysis]));
-  const assessedCount = analyses.length;
-  const unassessedCount = count - assessedCount;
-  const immediateCount = analyses.filter(
-    (analysis) => analysis.risk_level === "immediate",
+  const data = await getSheetBacklog();
+  const tickets = data.tickets.filter(category.matches);
+  const followupsByKey = new Map(
+    data.followups.map((followup) => [followup.key, followup]),
+  );
+  const rows = tickets.map((ticket) => {
+    const followup = followupsByKey.get(ticket.issue.key);
+
+    return toIssueRow(ticket.issue, {
+      analysis: followupAnalysis(followup),
+      scheduledFollowup: followup
+        ? {
+            draft: followup.followupDraft,
+            generatedAt: followup.generatedAt,
+            state: followup.followupState,
+          }
+        : undefined,
+    });
+  });
+  const linkedCpCount = new Set(
+    tickets.flatMap((ticket) =>
+      ticket.linkedIssues.filter((key) => key.startsWith("CP-")),
+    ),
+  ).size;
+  const draftsReady = tickets.filter((ticket) =>
+    Boolean(followupsByKey.get(ticket.issue.key)?.followupDraft),
   ).length;
-  const watchCount = analyses.filter(
-    (analysis) => analysis.risk_level === "watch",
-  ).length;
-  const normalCount = analyses.filter(
-    (analysis) => analysis.risk_level === "normal",
-  ).length;
+  const kpis: KpiItem[] = [
+    { label: "Total Tickets", value: tickets.length },
+    {
+      label: "3+ Days Without Activity",
+      tone: "warning",
+      value: countTicketsNeedingFollowup(tickets),
+    },
+    { label: "Linked CP Tickets", value: linkedCpCount },
+    { label: "AI Drafts Ready", value: draftsReady },
+  ];
 
   return (
     <>
-      <a className="skip-link" href="#main-content">
-        Skip to category content
-      </a>
+      <Link className="back-link" href="/">
+        <Icon name="chevron-left" size={14} />
+        Back to dashboard
+      </Link>
 
-      <nav className="app-navbar" aria-label="Main navigation">
-        <Link className="app-brand" href="/">
-          <span className="app-brand-mark" aria-hidden="true">TS</span>
-          <span>Dashboard</span>
-        </Link>
-        <div className="app-navbar-actions">
-          <ThemeToggle />
-        </div>
-      </nav>
-
-      <main id="main-content">
-        <Link className="back-link" href="/">
-          <span aria-hidden="true">←</span>
-          Back to dashboard
-        </Link>
-
-        <header className="hero-gradient">
-          <h1>{category.title}</h1>
-          <p className="subtitle">{category.description}</p>
-          <div className="refresh-info">
-            <span>Last Jira sync: {meta.last_sync}</span>
+      <div className="page-header-row">
+        <div className="page-title-group">
+          <h1 className="page-title">{category.title}</h1>
+          <p className="page-subtitle">{category.description}</p>
+          <div className="sync-meta">
+            <span>Source: TS Backlog</span>
             <span aria-hidden="true">•</span>
-            <span>
-              Refresh in <RefreshCountdown nextSyncIso={meta.next_sync_iso} />
-            </span>
+            <span>Refresh cadence: every 4 hours</span>
           </div>
-        </header>
-
-        <section aria-label="Risk summary" className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-icon accent" aria-hidden="true">🎫</div>
-            <div className="stat-content">
-              <div className="stat-value">{count}</div>
-              <div className="stat-label">Total tickets</div>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon danger" aria-hidden="true">🚨</div>
-            <div className="stat-content">
-              <div className="stat-value">{immediateCount}</div>
-              <div className="stat-label">Immediate action</div>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon warning" aria-hidden="true">👀</div>
-            <div className="stat-content">
-              <div className="stat-value">{watchCount}</div>
-              <div className="stat-label">Watch</div>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon success" aria-hidden="true">✅</div>
-            <div className="stat-content">
-              <div className="stat-value">{normalCount}</div>
-              <div className="stat-label">Normal</div>
-            </div>
-          </div>
-        </section>
-
-        {unassessedCount > 0 ? (
-          <p className="risk-scope-note">
-            AI risk assessment covers the {assessedCount} most recently updated ticket
-            {assessedCount === 1 ? "" : "s"} of {count} total; {unassessedCount} not yet assessed.
-          </p>
-        ) : null}
-
-        <div className="ticket-list">
-          {count === 0 ? <div className="empty-state">No tickets found.</div> : null}
-
-          {issues.map((issue) => (
-            <TicketCard
-              analysis={analysesByKey.get(issue.key)}
-              issue={issue}
-              key={issue.key}
-            />
-          ))}
         </div>
-      </main>
+        <div className="page-actions">
+          <Link className="btn" href="/sheet-followups">
+            <Icon name="bot" size={14} />
+            AI drafts
+          </Link>
+          <a className="btn" href={data.sourceUrl} rel="noreferrer" target="_blank">
+            <Icon name="external-link" size={14} />
+            Open sheet
+          </a>
+        </div>
+      </div>
+
+      <KpiStrip items={kpis} />
+
+      <IssueWorkspace rows={rows} showAssigneeTabs />
     </>
   );
 }

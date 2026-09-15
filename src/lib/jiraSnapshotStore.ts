@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
 
+import { getRedis, isRedisConfigured } from "@/lib/redis";
 import type { Category, FormattedIssue } from "@/lib/jiraClient";
 
-const SNAPSHOT_DIR = path.join(process.cwd(), "data");
-const SNAPSHOT_FILE = path.join(SNAPSHOT_DIR, "jira-refresh-history.json");
+const SNAPSHOT_KEY = "jira:snapshot";
+const LOCK_KEY = "jira:snapshot:lock";
+const LOCK_TTL_MS = 5000;
+const LOCK_RETRY_DELAY_MS = 50;
+const LOCK_MAX_WAIT_MS = 4000;
 const RETENTION_MS = 24 * 60 * 60 * 1000;
-let snapshotMutationQueue = Promise.resolve();
 
 export interface JiraSnapshotRow extends FormattedIssue {
   category_key: string;
@@ -51,17 +52,18 @@ function isSnapshotFile(value: unknown): value is JiraSnapshotFile {
 }
 
 async function readSnapshotFileIfExists(): Promise<JiraSnapshotFile | null> {
-  try {
-    const raw = await readFile(SNAPSHOT_FILE, "utf8");
-    const parsed: unknown = JSON.parse(raw);
+  if (!isRedisConfigured()) {
+    return null;
+  }
 
-    if (isSnapshotFile(parsed)) {
-      return parsed;
+  try {
+    const stored = await getRedis().get<unknown>(SNAPSHOT_KEY);
+
+    if (isSnapshotFile(stored)) {
+      return stored;
     }
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.error("Unable to read Jira snapshot file:", error);
-    }
+    console.error("Unable to read Jira snapshot from Redis:", error);
   }
 
   return null;
@@ -72,28 +74,62 @@ async function readSnapshotFile(): Promise<JiraSnapshotFile> {
 }
 
 async function writeSnapshotFile(snapshot: JiraSnapshotFile): Promise<void> {
-  await mkdir(SNAPSHOT_DIR, { recursive: true });
-  const temporaryFile = `${SNAPSHOT_FILE}.${process.pid}.${randomUUID()}.tmp`;
+  if (!isRedisConfigured()) {
+    return;
+  }
 
-  try {
-    await writeFile(
-      temporaryFile,
-      `${JSON.stringify(snapshot, null, 2)}\n`,
-      "utf8",
-    );
-    await rename(temporaryFile, SNAPSHOT_FILE);
-  } finally {
-    await rm(temporaryFile, { force: true });
+  await getRedis().set(SNAPSHOT_KEY, snapshot);
+}
+
+async function acquireSnapshotLock(): Promise<string> {
+  const token = randomUUID();
+
+  if (!isRedisConfigured()) {
+    return token;
+  }
+
+  const redis = getRedis();
+  const deadline = Date.now() + LOCK_MAX_WAIT_MS;
+
+  for (;;) {
+    const acquired = await redis.set(LOCK_KEY, token, {
+      nx: true,
+      px: LOCK_TTL_MS,
+    });
+
+    if (acquired === "OK") {
+      return token;
+    }
+
+    if (Date.now() >= deadline) {
+      throw new Error("Timed out acquiring Jira snapshot lock");
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_DELAY_MS));
   }
 }
 
-function serializeSnapshotMutation(
-  mutation: () => Promise<void>,
-): Promise<void> {
-  const result = snapshotMutationQueue.then(mutation);
+async function releaseSnapshotLock(token: string): Promise<void> {
+  if (!isRedisConfigured()) {
+    return;
+  }
 
-  snapshotMutationQueue = result.catch(() => undefined);
-  return result;
+  const redis = getRedis();
+  const current = await redis.get<string>(LOCK_KEY);
+
+  if (current === token) {
+    await redis.del(LOCK_KEY);
+  }
+}
+
+async function withSnapshotLock<T>(mutation: () => Promise<T>): Promise<T> {
+  const token = await acquireSnapshotLock();
+
+  try {
+    return await mutation();
+  } finally {
+    await releaseSnapshotLock(token);
+  }
 }
 
 function removeExpiredRows(
@@ -113,7 +149,7 @@ export async function saveCategorySnapshot(
   category: Category,
   issues: FormattedIssue[],
 ): Promise<void> {
-  await serializeSnapshotMutation(async () => {
+  await withSnapshotLock(async () => {
     const now = new Date();
     const snapshot = await readSnapshotFile();
     const rows = removeExpiredRows(snapshot.rows, now);
@@ -136,13 +172,11 @@ export async function saveCategorySnapshot(
 }
 
 export async function clearJiraSnapshots(now = new Date()): Promise<void> {
-  await serializeSnapshotMutation(() =>
-    writeSnapshotFile(createEmptySnapshotFile(now)),
-  );
+  await withSnapshotLock(() => writeSnapshotFile(createEmptySnapshotFile(now)));
 }
 
 export async function pruneJiraSnapshots(now = new Date()): Promise<void> {
-  await serializeSnapshotMutation(async () => {
+  await withSnapshotLock(async () => {
     const snapshot = await readSnapshotFile();
     const rows = removeExpiredRows(snapshot.rows, now);
 

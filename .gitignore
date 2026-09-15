@@ -8,3 +8,9 @@ tsconfig.tsbuildinfo
 data/
 graphify-out/.graphify_root
 graphify-out/20*/
+
+# Local Claude Code session/tool state - not project source
+.claude/
+.playwright-cli/
+.vercel-deploy-*.json
+.vercel-mcp-args.json

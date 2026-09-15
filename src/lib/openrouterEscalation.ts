@@ -1,60 +1,23 @@
+import { createHash } from "node:crypto";
+
+import { getCachedOcrTextForIssue } from "@/lib/attachmentOcr";
 import { getFallbackAnalysis } from "@/lib/mlEscalationModel";
 import type { FormattedIssue, TicketCommentContext } from "@/lib/jiraClient";
 import { getTicketCommentContext } from "@/lib/jiraClient";
-
-const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-const HUGGINGFACE_ENDPOINT = "https://router.huggingface.co/v1/chat/completions";
-
-type EscalationProvider = "openrouter" | "huggingface";
-
-function getProvider(): EscalationProvider {
-  const value = process.env.ESCALATION_PROVIDER?.toLowerCase();
-  return value === "huggingface" ? "huggingface" : "openrouter";
-}
-
-function getEndpoint(): string {
-  return getProvider() === "huggingface" ? HUGGINGFACE_ENDPOINT : OPENROUTER_ENDPOINT;
-}
-
-function getPrimaryModel(): string {
-  if (getProvider() === "huggingface") {
-    return process.env.HF_MODEL ?? "google/gemma-4-31B-it:novita";
-  }
-  return process.env.OPENROUTER_MODEL ?? "openai/gpt-oss-120b:free";
-}
-
-function getFallbackModel(): string {
-  if (getProvider() === "huggingface") {
-    return (
-      process.env.HF_FALLBACK_MODEL ??
-      process.env.HF_MODEL ??
-      "google/gemma-4-31B-it:novita"
-    );
-  }
-  return (
-    process.env.OPENROUTER_FALLBACK_MODEL ??
-    process.env.OPENROUTER_MODEL ??
-    "openai/gpt-oss-120b:free"
-  );
-}
-
-function getApiKey(): string | undefined {
-  return getProvider() === "huggingface"
-    ? process.env.HF_TOKEN
-    : process.env.OPENROUTER_API_KEY;
-}
-
-function isEscalationEnabled(): boolean {
-  return process.env.OPENROUTER_ESCALATION_ENABLED === "true";
-}
+import {
+  callChatCompletionChain,
+  getApiKey,
+  getChainMaxRetries,
+  getChainTimeoutMs,
+  getModelChain,
+  getProvider,
+  isEscalationEnabled,
+} from "@/lib/llmClient";
+import { getRedis, isRedisConfigured } from "@/lib/redis";
 
 function isReasoningEnabled(): boolean {
   return process.env.OPENROUTER_REASONING_ENABLED !== "false";
 }
-
-const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
-const MAX_DELAY_MS = 10_000;
-const FALLBACK_COOLDOWN_MS = 500;
 
 function parseIntEnv(value: string | undefined, fallback: number): number {
   if (!value) {
@@ -64,16 +27,8 @@ function parseIntEnv(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function getMaxRetries(): number {
-  return parseIntEnv(process.env.OPENROUTER_MAX_RETRIES, 4);
-}
-
-function getRequestTimeoutMs(): number {
-  return parseIntEnv(process.env.OPENROUTER_REQUEST_TIMEOUT_MS, 45000);
-}
-
-function getBaseDelayMs(): number {
-  return parseIntEnv(process.env.OPENROUTER_BASE_DELAY_MS, 500);
+function getDefaultAnalysisLimit(): number {
+  return parseIntEnv(process.env.ESCALATION_ANALYSIS_LIMIT, 25);
 }
 
 export type EscalationRiskLevel = "immediate" | "watch" | "normal" | "unknown";
@@ -89,17 +44,7 @@ export interface TicketEscalationAnalysis {
 interface TicketAnalysisInput {
   comments: TicketCommentContext[];
   issue: FormattedIssue;
-}
-
-interface OpenRouterChoice {
-  message?: {
-    content?: string;
-    reasoning_details?: unknown;
-  };
-}
-
-interface OpenRouterChatResponse {
-  choices?: OpenRouterChoice[];
+  ocrText: string;
 }
 
 interface RawAnalysis {
@@ -110,33 +55,44 @@ interface RawAnalysis {
   risk_score?: unknown;
 }
 
-const analysisCache = new Map<string, TicketEscalationAnalysis[]>();
-const MAX_ANALYSIS_CACHE_ENTRIES = 50;
+const ANALYSIS_CACHE_PREFIX = "escalation:analysis:";
+const ANALYSIS_CACHE_TTL_SECONDS = 1800;
 
-function setAnalysisCache(key: string, value: TicketEscalationAnalysis[]): void {
-  analysisCache.delete(key);
-  analysisCache.set(key, value);
+function analysisCacheKey(rawKey: string): string {
+  const hash = createHash("sha256").update(rawKey).digest("hex");
+  return `${ANALYSIS_CACHE_PREFIX}${hash}`;
+}
 
-  if (analysisCache.size > MAX_ANALYSIS_CACHE_ENTRIES) {
-    const oldestKey = analysisCache.keys().next().value;
-    if (oldestKey !== undefined) {
-      analysisCache.delete(oldestKey);
-    }
+async function getAnalysisCache(
+  key: string,
+): Promise<TicketEscalationAnalysis[] | null> {
+  if (!isRedisConfigured()) {
+    return null;
+  }
+
+  try {
+    return await getRedis().get<TicketEscalationAnalysis[]>(analysisCacheKey(key));
+  } catch (error) {
+    console.warn("Escalation analysis cache read failed; treating as a cache miss.", error);
+    return null;
   }
 }
 
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
+async function setAnalysisCache(
+  key: string,
+  value: TicketEscalationAnalysis[],
+): Promise<void> {
+  if (!isRedisConfigured()) {
+    return;
+  }
 
-function jitteredDelay(attempt: number): number {
-  const baseDelayMs = getBaseDelayMs();
-  const base = Math.min(baseDelayMs * 2 ** (attempt - 1), MAX_DELAY_MS);
-  const jitter = Math.random() * base * 0.5;
-
-  return Math.round(base + jitter);
+  try {
+    await getRedis().set(analysisCacheKey(key), value, {
+      ex: ANALYSIS_CACHE_TTL_SECONDS,
+    });
+  } catch (error) {
+    console.warn("Escalation analysis cache write failed; continuing without caching this result.", error);
+  }
 }
 
 function buildCacheKey(issues: FormattedIssue[]): string {
@@ -185,10 +141,6 @@ function normalizeAnalysis(
   };
 }
 
-function extractContent(response: OpenRouterChatResponse): string {
-  return response.choices?.[0]?.message?.content?.trim() ?? "";
-}
-
 async function parseAnalyses(
   text: string,
   inputs: TicketAnalysisInput[],
@@ -226,19 +178,22 @@ async function parseAnalyses(
 function buildPrompt(inputs: TicketAnalysisInput[]): string {
   return `You are a support escalation triage assistant. Analyze Jira tickets and recent comments. Return only a valid JSON array, no markdown fences. Each object must have: key, risk_level ("immediate" | "watch" | "normal"), risk_score (0-100), reason, next_action.
 
-Mark "immediate" when the ticket may cause client escalation, SLA urgency, blocker language, repeated client follow-up, production impact, angry/frustrated tone, missed response, or external dependency risk.
+Mark "immediate" when the ticket may cause client escalation, SLA urgency, blocker language, repeated client follow-up, production impact, angry/frustrated tone, missed response, or external dependency risk. When present, pending_reason explains WHY a ticket is stalled rather than being itself a risk signal - do not automatically treat every ticket with a pending_reason as high risk. attachment_text (when present) is OCR'd text from the ticket's image/PDF attachments - treat it as additional ticket context, same as the description or comments.
 
 Tickets:
 ${JSON.stringify(
-  inputs.map(({ comments, issue }) => ({
+  inputs.map(({ comments, issue, ocrText }) => ({
     action_date: issue.action_date,
     assignee: issue.assignee,
+    attachment_text: ocrText || undefined,
     comments,
     key: issue.key,
     latest_comment_created: issue.latest_comment_created,
+    pending_reason: issue.pending_reason,
     priority: issue.priority,
     project: issue.project,
     reporter: issue.reporter,
+    severity: issue.severity,
     status: issue.status,
     summary: issue.summary,
     updated: issue.updated,
@@ -248,8 +203,7 @@ ${JSON.stringify(
 )}`;
 }
 
-async function callOpenRouter(
-  model: string,
+async function callAiForAnalysis(
   inputs: TicketAnalysisInput[],
 ): Promise<TicketEscalationAnalysis[] | null> {
   const apiKey = getApiKey();
@@ -259,82 +213,39 @@ async function callOpenRouter(
   }
 
   const provider = getProvider();
-  const endpoint = getEndpoint();
-  const maxRetries = getMaxRetries();
-
-  const body: Record<string, unknown> = {
-    messages: [
-      {
-        content: buildPrompt(inputs),
-        role: "user",
-      },
-    ],
-    model,
-    temperature: 0.1,
-  };
+  const extraBody: Record<string, unknown> = {};
 
   if (provider === "openrouter") {
-    body.reasoning = { enabled: isReasoningEnabled() };
-    body.response_format = { type: "json_object" };
+    extraBody.reasoning = { enabled: isReasoningEnabled() };
+    extraBody.response_format = { type: "json_object" };
   }
 
-  for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
-    try {
-      const response = await fetch(endpoint, {
-        body: JSON.stringify(body),
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-        signal: AbortSignal.timeout(getRequestTimeoutMs()),
-      });
+  const isFastChain = provider === "nvidia";
 
-      if (response.ok) {
-        const data = (await response.json()) as OpenRouterChatResponse;
-        const text = extractContent(data);
+  const text = await callChatCompletionChain(buildPrompt(inputs), {
+    extraBody,
+    maxTokens: 4096,
+    models: getModelChain(),
+    perModelMaxRetries: isFastChain ? getChainMaxRetries() : undefined,
+    perModelTimeoutMs: isFastChain ? getChainTimeoutMs() : undefined,
+    temperature: 0.1,
+  });
 
-        return parseAnalyses(text, inputs);
-      }
-
-      if (!RETRYABLE_STATUSES.has(response.status)) {
-        console.warn(
-          `${provider} ${model} returned non-retryable status ${response.status}; aborting.`,
-        );
-        return null;
-      }
-
-      console.warn(
-        `${provider} ${model} returned ${response.status} (attempt ${attempt}/${maxRetries}).`,
-      );
-
-      if (attempt < maxRetries) {
-        await wait(jitteredDelay(attempt));
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(
-        `${provider} ${model} network error on attempt ${attempt}/${maxRetries}: ${message}`,
-      );
-
-      if (attempt < maxRetries) {
-        await wait(jitteredDelay(attempt));
-      }
-    }
+  if (text === null) {
+    return null;
   }
 
-  console.warn(`${provider} ${model} exhausted all ${maxRetries} attempts.`);
-  return null;
+  return parseAnalyses(text, inputs);
 }
 
 export async function analyzeEscalationRisk(
   issues: FormattedIssue[],
-  limit = 12,
+  limit = getDefaultAnalysisLimit(),
   getComments: (issueKey: string) => Promise<TicketCommentContext[]> = getTicketCommentContext,
 ): Promise<TicketEscalationAnalysis[]> {
   const scopedIssues = issues.slice(0, limit);
   const cacheKey = buildCacheKey(scopedIssues);
-  const cached = analysisCache.get(cacheKey);
+  const cached = await getAnalysisCache(cacheKey);
 
   if (cached) {
     return cached;
@@ -347,6 +258,7 @@ export async function analyzeEscalationRisk(
       scopedIssues.map(async (issue) => ({
         comments: await getComments(issue.key),
         issue,
+        ocrText: await getCachedOcrTextForIssue(issue),
       })),
     );
   } catch (error) {
@@ -355,34 +267,26 @@ export async function analyzeEscalationRisk(
       error,
     );
     const fallback = await Promise.all(scopedIssues.map((issue) => getFallbackAnalysis(issue)));
-    setAnalysisCache(cacheKey, fallback);
+    await setAnalysisCache(cacheKey, fallback);
     return fallback;
   }
 
   try {
-    const primary = await callOpenRouter(getPrimaryModel(), inputs);
-    if (primary) {
-      setAnalysisCache(cacheKey, primary);
-      return primary;
+    const analyses = await callAiForAnalysis(inputs);
+
+    if (analyses) {
+      await setAnalysisCache(cacheKey, analyses);
+      return analyses;
     }
 
-    console.warn("Primary OpenRouter escalation analysis unavailable; trying fallback model.");
-    await wait(FALLBACK_COOLDOWN_MS);
-
-    const fallbackModel = await callOpenRouter(getFallbackModel(), inputs);
-    if (fallbackModel) {
-      setAnalysisCache(cacheKey, fallbackModel);
-      return fallbackModel;
-    }
-
-    console.warn("Fallback OpenRouter escalation analysis unavailable; using ML/local fallback.");
+    console.warn("Every model in the escalation chain failed; using ML/local fallback.");
   } catch (error) {
-    console.warn("Unexpected error during OpenRouter escalation analysis; using ML/local fallback.", error);
+    console.warn("Unexpected error during AI escalation analysis; using ML/local fallback.", error);
   }
 
   const fallback = await Promise.all(
     inputs.map(({ comments, issue }) => getFallbackAnalysis(issue, comments)),
   );
-  setAnalysisCache(cacheKey, fallback);
+  await setAnalysisCache(cacheKey, fallback);
   return fallback;
 }

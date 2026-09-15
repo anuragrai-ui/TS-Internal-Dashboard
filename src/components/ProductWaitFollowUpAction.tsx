@@ -1,0 +1,163 @@
+"use client";
+
+import { useState } from "react";
+
+interface ProductWaitFollowUpActionProps {
+  issueKey: string;
+}
+
+type Status = "idle" | "drafting" | "drafted" | "sending" | "sent" | "error";
+
+interface DraftResponseBody {
+  draftText?: string;
+  error?: string;
+  mentionAccountId?: string;
+  toolCallCount?: number;
+}
+
+interface SendResponseBody {
+  error?: string;
+  violations?: string[];
+}
+
+const DEFAULT_DRAFT_ERROR = "Failed to draft a follow-up message.";
+const DEFAULT_SEND_ERROR = "Failed to send the follow-up.";
+
+export function ProductWaitFollowUpAction({ issueKey }: ProductWaitFollowUpActionProps): React.ReactElement {
+  const [status, setStatus] = useState<Status>("idle");
+  const [draftText, setDraftText] = useState("");
+  const [mentionAccountId, setMentionAccountId] = useState<string | undefined>(undefined);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [toolCallCount, setToolCallCount] = useState(0);
+
+  const requestDraft = async (): Promise<void> => {
+    setStatus("drafting");
+
+    try {
+      const response = await fetch(`/api/agent-followups/product-wait/${issueKey}/draft`, { method: "POST" });
+      const body = (await response.json()) as DraftResponseBody;
+
+      if (!response.ok || typeof body.draftText !== "string") {
+        setErrorMessage(body.error ?? DEFAULT_DRAFT_ERROR);
+        setStatus("error");
+        return;
+      }
+
+      setDraftText(body.draftText);
+      setMentionAccountId(body.mentionAccountId);
+      setToolCallCount(body.toolCallCount ?? 0);
+      setStatus("drafted");
+    } catch {
+      setErrorMessage(DEFAULT_DRAFT_ERROR);
+      setStatus("error");
+    }
+  };
+
+  const sendFollowUp = async (): Promise<void> => {
+    setStatus("sending");
+
+    try {
+      const response = await fetch(`/api/tickets/${issueKey}/followup/send`, {
+        body: JSON.stringify({ kind: "product_wait", mentionAccountId, text: draftText }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const body = (await response.json()) as SendResponseBody;
+
+      if (!response.ok) {
+        setErrorMessage(
+          body.violations?.length ? `${body.error ?? DEFAULT_SEND_ERROR} (${body.violations.join("; ")})` : (body.error ?? DEFAULT_SEND_ERROR),
+        );
+        setStatus("error");
+        return;
+      }
+
+      setStatus("sent");
+    } catch {
+      setErrorMessage(DEFAULT_SEND_ERROR);
+      setStatus("error");
+    }
+  };
+
+  const handleCancel = (): void => {
+    setDraftText("");
+    setStatus("idle");
+  };
+
+  if (status === "idle") {
+    return (
+      <button
+        className="followup-button"
+        onClick={() => {
+          void requestDraft();
+        }}
+        type="button"
+      >
+        Draft follow-up
+      </button>
+    );
+  }
+
+  if (status === "drafting") {
+    return (
+      <button className="followup-button" disabled type="button">
+        Drafting…
+      </button>
+    );
+  }
+
+  if (status === "drafted" || status === "sending") {
+    const sending = status === "sending";
+
+    return (
+      <div className="followup-panel">
+        {toolCallCount > 0 ? (
+          <p className="followup-research-note">
+            Researched {toolCallCount} related {toolCallCount === 1 ? "item" : "items"} while drafting this.
+          </p>
+        ) : null}
+        <textarea
+          className="followup-textarea"
+          disabled={sending}
+          onChange={(event) => setDraftText(event.target.value)}
+          rows={5}
+          value={draftText}
+        />
+        <div className="followup-panel-actions">
+          <button
+            className="followup-button followup-button-primary"
+            disabled={sending || draftText.trim().length === 0}
+            onClick={() => {
+              void sendFollowUp();
+            }}
+            type="button"
+          >
+            {sending ? "Sending…" : "Send"}
+          </button>
+          <button className="followup-button" disabled={sending} onClick={handleCancel} type="button">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "sent") {
+    return <span className="followup-status followup-status-success">Follow-up sent</span>;
+  }
+
+  return (
+    <div className="followup-panel">
+      <span className="followup-status followup-status-error">{errorMessage}</span>
+      <button
+        className="followup-button"
+        onClick={() => {
+          void requestDraft();
+        }}
+        type="button"
+      >
+        Retry
+      </button>
+    </div>
+  );
+}

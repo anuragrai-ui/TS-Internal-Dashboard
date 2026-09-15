@@ -31,16 +31,16 @@ assert(
   ":root should declare light dark color-scheme support",
 );
 assert(
-  rootBlock.includes("--bg: #f8f9fa"),
-  "Light mode background should be Argon light gray (#f8f9fa)",
+  rootBlock.includes("--bg: #f7f8fa"),
+  "Light mode background should be the enterprise light gray (#f7f8fa)",
 );
 assert(
   rootBlock.includes("--surface: #ffffff"),
   "Light mode surface should be white (#ffffff)",
 );
 assert(
-  rootBlock.includes("--accent: #5e72e4"),
-  "Light mode accent should be Argon blue (#5e72e4)",
+  rootBlock.includes("--accent: #0c66e4"),
+  "Light mode accent should be the enterprise blue (#0c66e4)",
 );
 
 const darkBlock = extractRuleBlock(':root[data-theme="dark"] {');
@@ -49,12 +49,12 @@ assert(
   "Dark mode should set color-scheme to dark",
 );
 assert(
-  darkBlock.includes("--bg: #0f172a"),
-  "Dark mode background should be slate-900 (#0f172a)",
+  darkBlock.includes("--bg: #161a1d"),
+  "Dark mode background should be the enterprise dark neutral (#161a1d)",
 );
 assert(
-  darkBlock.includes("--accent: #7a8bf8"),
-  "Dark mode accent should be light purple (#7a8bf8)",
+  darkBlock.includes("--accent: #4c9aff"),
+  "Dark mode accent should be the enterprise dark-mode blue (#4c9aff)",
 );
 
 const lightOverride = extractRuleBlock(':root[data-theme="light"] {');
@@ -63,30 +63,32 @@ assert(
   "Light mode override should set color-scheme to light",
 );
 assert(
-  lightOverride.includes("--bg: #f8f9fa"),
-  "Light mode override should keep Argon light gray background",
+  lightOverride.includes("--bg: #f7f8fa"),
+  "Light mode override should keep the enterprise light background",
 );
 
-const darkThumb = extractRuleBlock(':root[data-theme="dark"] .theme-toggle-thumb');
+const appShell = extractRuleBlock(".app-shell {");
 assert(
-  darkThumb.includes("background: var(--accent)"),
-  "Dark mode toggle thumb should use accent color",
-);
-assert(
-  darkThumb.includes("transform: translateX(1.125rem)"),
-  "Dark mode toggle thumb should slide to the right",
+  appShell.includes("display: flex"),
+  "App shell should lay the sidebar and main column out with flexbox",
 );
 
-const hero = extractRuleBlock(".hero-gradient {");
+const sidebar = extractRuleBlock(".app-sidebar {");
 assert(
-  hero.includes("background: linear-gradient(135deg, var(--accent) 0%, #825ee4 100%)"),
-  "Hero should use Argon purple-blue gradient",
+  sidebar.includes("position: sticky"),
+  "Sidebar should stay fixed in view while content scrolls",
 );
 
-const statCard = extractRuleBlock(".stat-card {");
+const dataTable = extractRuleBlock(".data-table thead th {");
 assert(
-  statCard.includes("border-radius: var(--radius-xl)"),
-  "Stat cards should have rounded corners",
+  dataTable.includes("position: sticky"),
+  "Data table header should stick while rows scroll",
+);
+
+const drawer = extractRuleBlock(".drawer-panel {");
+assert(
+  drawer.includes("position: fixed"),
+  "Issue detail drawer should be a fixed-position slide-over panel",
 );
 
 const prefersDark = css.indexOf("@media (prefers-color-scheme: dark)");
@@ -101,5 +103,5 @@ assert(
   "CSS should respect prefers-reduced-motion",
 );
 
-console.log("PASS: Argon-style theme and component styles are present.");
+console.log("PASS: Enterprise console theme and shell styles are present.");
 console.log("\nAll theme tests passed.");

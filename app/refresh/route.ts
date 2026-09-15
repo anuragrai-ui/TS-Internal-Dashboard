@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { clearCache } from "@/lib/cache";
 
-export function GET(): never {
-  clearCache();
+export async function GET(): Promise<never> {
+  await clearCache();
   redirect("/");
 }

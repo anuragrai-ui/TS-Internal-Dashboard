@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
-import { Open_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
+
+import { AppShell } from "@/components/AppShell";
 
 import "./globals.css";
 
-const openSans = Open_Sans({
+const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-open-sans",
+  variable: "--font-inter",
 });
 
 export const metadata: Metadata = {
@@ -29,12 +31,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>): React.ReactElement {
   return (
-    <html className={openSans.variable} lang="en" suppressHydrationWarning>
+    <html className={inter.variable} lang="en" suppressHydrationWarning>
       <head>
         <meta content="light dark" name="color-scheme" />
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className={openSans.className}>{children}</body>
+      <body className={inter.className}>
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }

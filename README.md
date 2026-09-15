@@ -1,26 +1,33 @@
 # TS Jira Dashboard
 
-A Next.js TypeScript dashboard for Jira tickets assigned to the current user. It shows high-level ticket tiles on the home page and category-specific ticket lists for actionable, waiting-for-product, waiting-for-client, and waiting-for-operations work.
+A Next.js TypeScript dashboard for Jira tickets assigned to the current user. It shows high-level category tiles on the home page and a dense, filterable, sortable issue table per category - actionable, waiting-for-product, waiting-for-client, and waiting-for-operations - including CP (client-raised) tickets alongside TS tickets. Clicking a row opens a detail drawer where you can draft and send an AI-assisted follow-up comment directly to Jira, and see when a ticket is being discussed in a public Slack channel.
 
-The UI is inspired by the [Argon Dashboard](https://github.com/creativetimofficial/argon-dashboard-tailwind) design: a sticky top navigation, gradient hero banner, rounded stat cards, and soft shadows. It also displays more Jira fields from `all_filed.json` on ticket cards (severity, support category, task type, urgency, source, team, due date, comments, attachments, subtasks, and labels).
+The UI is a Kibana/Jira-inspired enterprise operations console: a fixed left sidebar, a compact top header with breadcrumb and ticket-key search, a Jira-style sortable/filterable issues table with a right-side detail drawer, and Kibana-style KPI strips and breakdown bars - dense, bordered panels rather than large rounded cards or gradients. It also displays more Jira fields from `all_filed.json` (severity, support category, task type, urgency, source, team, due date, pending reason, comments, attachments, subtasks, and labels) - the table shows the scannable subset, the drawer shows everything.
 
 ## Tech Stack
 
-- Next.js app router
+- Next.js app router, deployed on Vercel (serverless)
 - React
 - TypeScript
-- Jira Cloud REST API
-- OpenRouter API server-side escalation triage (default model `openai/gpt-oss-120b:free`)
-- In-memory server cache
-- Open Sans (via `next/font/google`)
+- Jira Cloud REST API (read + comment-write)
+- OpenRouter (default), Mistral, or NVIDIA NIM - server-side escalation triage (see [AI Escalation Triage](#ai-escalation-triage)); Mistral also powers attachment OCR (see [Attachment OCR](#attachment-ocr))
+- Claude (Anthropic, default) - follow-up/closure draft generation, an independent provider axis from escalation triage above (see [AI Escalation Triage](#ai-escalation-triage))
+- Upstash Redis (REST client) - cache, snapshot history, analysis cache, follow-up cooldown/audit log, Slack mention storage
+- Vercel Cron - scheduled Jira refresh
+- Slack Events API - real-time ticket-mention notifications
+- Inter (via `next/font/google`)
 - CSS custom properties for light/dark theming
 - Graphify Labs project graph
 
 ## Requirements
 
 - Node.js 20+
-- Jira Cloud API token
-- OpenRouter API key
+- Jira Cloud API token (with permission to add comments, for the follow-up feature)
+- An API key for whichever provider is active in `ESCALATION_PROVIDER` (OpenRouter by default, or NVIDIA/Mistral) - this is escalation-risk triage only
+- An `ANTHROPIC_API_KEY` for follow-up/closure draft generation (`DRAFT_PROVIDER`, Anthropic/Claude by default) - a separate, independent axis from the above; leaving it unset just means drafts fall back to the hardcoded templates
+- An Upstash Redis instance (e.g. via the Vercel Marketplace) - required for caching, snapshots, the follow-up cooldown/audit log, and Slack mentions. The app still runs and degrades gracefully without one (every Redis-backed feature is skipped rather than erroring), but nothing persists across requests/deploys until it's configured.
+- A Vercel deployment with `CRON_SECRET` set, to run the scheduled refresh
+- Optionally, a Slack app (Event Subscriptions + Signing Secret) for the Slack-mention feature - see [Slack Mentions](#slack-mentions)
 
 ## Environment
 
@@ -31,18 +38,71 @@ JIRA_BASE_URL=https://certifyos.atlassian.net
 JIRA_EMAIL=your.email@example.com
 JIRA_API_TOKEN=your-jira-api-token
 JIRA_PROJECT_KEY=TS
-OPENROUTER_API_KEY=your-openrouter-api-key
+
+UPSTASH_REDIS_REST_URL=your-upstash-redis-rest-url
+UPSTASH_REDIS_REST_TOKEN=your-upstash-redis-rest-token
+
+CRON_SECRET=your-cron-secret
+
+# Active escalation-RISK-TRIAGE provider (immediate/watch/low scoring only): openrouter | nvidia | mistral | anthropic
+ESCALATION_PROVIDER=openrouter
 OPENROUTER_ESCALATION_ENABLED=false
-OPENROUTER_MODEL=openai/gpt-oss-120b:free
-OPENROUTER_FALLBACK_MODEL=openai/gpt-oss-120b:free
+
+# OpenRouter (default triage provider) - qwen/qwen3.7-flash confirmed live
+# against OpenRouter's /api/v1/models catalog: cheap, fast "flash"-tier
+# reasoning model.
+OPENROUTER_API_KEY=your-openrouter-api-key
+OPENROUTER_MODEL=qwen/qwen3.7-flash
+OPENROUTER_FALLBACK_MODEL=qwen/qwen3.7-flash
 OPENROUTER_REASONING_ENABLED=true
-# Optional tuning for OpenRouter retries/timeouts
+# Optional tuning for OpenRouter's own retry/backoff (unrelated to the NVIDIA chain below)
 OPENROUTER_MAX_RETRIES=4
 OPENROUTER_REQUEST_TIMEOUT_MS=45000
 OPENROUTER_BASE_DELAY_MS=500
+
+# Active follow-up/closure DRAFT-generation provider - independent from
+# ESCALATION_PROVIDER above: openrouter | nvidia | mistral | anthropic
+DRAFT_PROVIDER=anthropic
+
+# Anthropic (default draft provider) - Claude Haiku 4.5. Every draft's
+# instruction preamble is sent as a cached system prompt (prompt caching),
+# so the many similar drafts one cron batch generates reuse the cached
+# prefix instead of paying full input price on each one.
+ANTHROPIC_API_KEY=your-anthropic-api-key
+ANTHROPIC_MODEL=claude-haiku-4-5-20251001
+ANTHROPIC_FALLBACK_MODEL=
+
+# Mistral (alternative provider) - also powers attachment OCR (see below)
+# regardless of which provider is active. Was the default here previously;
+# demoted after mistral-small-2603 started returning 429 (rate limited) on
+# every attempt under normal use.
+MISTRAL_API_KEY=your-mistral-api-key
+MISTRAL_MODEL=mistral-small-2603
+MISTRAL_FALLBACK_MODEL=
+MISTRAL_OCR_MODEL=mistral-ocr-2512
+
+# NVIDIA NIM (alternative provider) - ordered model chain, one fast attempt each.
+# Not the default: the free tier's queue latency made this unreliable for a
+# page-load-blocking call in testing - see AI Escalation Triage below.
+NVIDIA_API_KEY=your-nvidia-api-key
+NVIDIA_MODELS=
+NVIDIA_CHAIN_TIMEOUT_MS=15000
+NVIDIA_CHAIN_MAX_RETRIES=1
+
+# Max tickets per category analyzed for escalation risk (default 25)
+ESCALATION_ANALYSIS_LIMIT=25
+
+# Concurrency cap for per-ticket Jira comment lookups (default 8)
+JIRA_FETCH_CONCURRENCY=8
+
+# Hours to block a repeat follow-up send on the same ticket (default 24)
+FOLLOWUP_COOLDOWN_HOURS=24
+
+# Slack Events API webhook signature verification
+SLACK_SIGNING_SECRET=your-slack-app-signing-secret
 ```
 
-`.env` is ignored by git. Do not commit Jira or OpenRouter credentials.
+`.env` is ignored by git. Do not commit Jira, provider, Redis, or Slack credentials.
 
 ## Install
 
@@ -71,6 +131,8 @@ npm run build
 npm start
 npm run test:escalation
 npm run test:theme
+npm run test:slack
+npm run test:jira-comment-adf
 ```
 
 ## Routes
@@ -78,62 +140,113 @@ npm run test:theme
 - `/` - dashboard tiles
 - `/category/[categoryKey]` - ticket list for one category
 - `/history` - previous refresh data retained for the last 24 hours
-- `/refresh` - clears the in-memory cache and redirects to the dashboard
+- `/sla-followups` - TS tickets due for an SLA follow-up (see [SLA Follow-Ups](#sla-follow-ups))
+- `/refresh` - clears the cache and redirects to the dashboard
 - `/health` - health check
 - `/api/health` - API health check
+- `/api/cron/refresh` - Vercel Cron target (hourly); requires a matching `CRON_SECRET` bearer token
+- `/api/tickets/[key]/followup/draft` - POST, drafts an AI follow-up message for review
+- `/api/tickets/[key]/followup/send` - POST, posts the (optionally edited) draft as a Jira comment (also accepts `kind`/`mentionAccountId` for SLA follow-ups, see below)
+- `/api/sla-followups` - GET, lists tickets currently due for an SLA follow-up
+- `/api/sla-followups/[key]/draft` - POST, drafts a stage-aware SLA follow-up message
+- `/api/slack/events` - POST, Slack Events API webhook (signature-verified)
 
 ## Project Structure
 
 ```text
 app/
-  page.tsx                       Dashboard page (Argon-style hero + stats + tiles)
-  category/[categoryKey]/page.tsx Category detail page with risk summary stats
+  page.tsx                       Dashboard page (KPI strip + category breakdown + list)
+  category/[categoryKey]/page.tsx Category detail page - KPI strip + issue workspace
   history/page.tsx               Previous refresh data page
+  sla-followups/page.tsx         SLA follow-up review queue (dense table)
   refresh/route.ts               Cache refresh route
   health/route.ts                Health route
   api/health/route.ts            API health route
-  globals.css                    Global design tokens & Argon-style components
-  layout.tsx                     Root layout with theme init script
+  api/cron/refresh/route.ts      Vercel Cron target - scheduled snapshot/cache refresh
+  api/tickets/[key]/followup/draft/route.ts  Draft an AI follow-up message
+  api/tickets/[key]/followup/send/route.ts   Post a follow-up as a Jira comment
+  api/sla-followups/route.ts               List SLA follow-up candidates
+  api/sla-followups/[key]/draft/route.ts   Draft a stage-aware SLA follow-up message
+  api/slack/events/route.ts      Slack Events API webhook
+  globals.css                    Global design tokens & enterprise console components
+  layout.tsx                     Root layout - Inter font, theme init script, AppShell
 
 src/
+  components/AppShell.tsx        Server wrapper - resolves current user + Jira base URL
+  components/AppShellClient.tsx  Sidebar/header shell controller (collapse + mobile state)
+  components/Sidebar.tsx         Fixed left navigation (collapsible, active-route aware)
+  components/TopHeader.tsx       Breadcrumb, ticket-key jump search, theme/refresh/user
+  components/IssueWorkspace.tsx  Filter/sort/drawer state for one category's issue table
+  components/IssueTable.tsx      Dense sortable issues table
+  components/IssueDrawer.tsx     Right-side issue detail panel (Escape/overlay to close)
+  components/FilterDropdown.tsx  Reusable multi-select filter dropdown
+  components/StatusBadge.tsx, PriorityIndicator.tsx, RiskBadge.tsx  Table/drawer badges
+  components/KpiStrip.tsx, BreakdownBars.tsx  Compact KPI row + real-data breakdown bars
   components/RefreshCountdown.tsx Client-side refresh countdown
   components/ThemeToggle.tsx     Light/dark theme toggle (system-aware + persisted)
-  components/TicketCard.tsx      Interactive ticket card with extra Jira fields
-  lib/cache.ts                   In-memory cache
-  lib/openrouterEscalation.ts   Server-side OpenRouter escalation triage
-  lib/jiraClient.ts              Jira API and ticket category logic
-  lib/jiraSnapshotStore.ts       24-hour JSON snapshot persistence
-  lib/jiraRefreshScheduler.ts    Scheduled snapshot rotation
+  components/FollowUpAction.tsx  Draft/review/send follow-up UI (lives in the drawer)
+  components/SlaFollowUpAction.tsx Draft/review/send-and-close UI for SLA follow-ups
+  lib/issueRow.ts                IssueRow shape + age/date formatting + breakdown helpers
+  lib/slaFollowup.ts             SLA follow-up candidate detection
+  lib/followupAudit.ts           Shared follow-up audit log (manual + SLA)
+  lib/redis.ts                   Shared Upstash Redis client
+  lib/cache.ts                   Redis-backed category cache
+  lib/openrouterEscalation.ts   Server-side escalation triage (OpenRouter/Mistral/NVIDIA)
+  lib/llmClient.ts               Shared LLM chat-completion HTTP client + model-chain fallback
+  lib/followupDraft.ts           AI follow-up message drafting
+  lib/mistralOcr.ts              Mistral OCR client for image/PDF attachments
+  lib/attachmentOcr.ts           Attachment OCR caching + background enrichment
+  lib/escalationHeuristics.ts    Local keyword-based risk heuristic (final fallback)
+  lib/mlEscalationModel.ts       ONNX anomaly-model fallback (opt-in)
+  lib/jiraClient.ts              Jira API, ticket category logic, comment writes/mentions, transitions, attachment download
+  lib/jiraSnapshotStore.ts       24-hour snapshot persistence (Redis-backed)
+  lib/jiraRefreshScheduler.ts    Scheduled refresh logic, invoked by /api/cron/refresh
+  lib/slackSignature.ts          Slack webhook request-signature verification
 
 scripts/
   test-escalation.ts            Escalation/heuristic unit tests
   test-theme.ts                 Theme CSS token tests
+  test-jira-comment-adf.ts      Jira comment ADF (mention) construction tests
+  test-slack-signature.ts       Slack signature verification unit tests
+  test-llm-client.ts            Anthropic/OpenAI-compatible request+response translation, draft/triage provider independence, pickVariant tests
 ```
 
 ## AI Escalation Triage
 
-Category pages can run a server-side OpenRouter analysis over the ticket and recent comments. Set `OPENROUTER_ESCALATION_ENABLED=true` to enable this external analysis. The default model is `openai/gpt-oss-120b:free`; if that request fails, the app falls back to `OPENROUTER_FALLBACK_MODEL` (defaults to the same model).
+Category pages can run a server-side AI analysis over each ticket and its recent comments to score escalation risk (immediate/watch/low). Set `OPENROUTER_ESCALATION_ENABLED=true` to enable it (this flag is the master switch for both this and draft generation below, regardless of which provider is active for either). `ESCALATION_PROVIDER` selects *this* feature's provider: `openrouter` (default), `nvidia`, `mistral`, or `anthropic`.
 
-If OpenRouter returns a retryable error (such as 429 rate-limiting or 503) or times out, the request is retried with exponential backoff and jitter. If both models fail, the app silently falls back to a local heuristic analysis so the category page still renders without throwing unhandled errors. Tune retry behavior with `OPENROUTER_MAX_RETRIES`, `OPENROUTER_REQUEST_TIMEOUT_MS`, and `OPENROUTER_BASE_DELAY_MS`.
+Follow-up/closure message drafting (see [Follow-Up Comments](#follow-up-comments) below) is a **separate feature with its own, independent provider axis** - `DRAFT_PROVIDER` (Anthropic/Claude by default), not `ESCALATION_PROVIDER`. The two used to share one pipeline; they were split apart so switching one doesn't silently change the other's already-tuned behavior. See [Follow-Up Draft Generation](#follow-up-draft-generation) for that provider's own docs.
 
-Reasoning/thinking tokens are enabled by default (`OPENROUTER_REASONING_ENABLED=true`) for models that support them.
+**OpenRouter is the default provider**, model `qwen/qwen3.7-flash` - confirmed live against OpenRouter's `/api/v1/models` catalog and a real chat-completion call (~11s for a full analysis prompt, valid ticket-specific JSON output). It's a *reasoning* model: part of `maxTokens` is spent on hidden chain-of-thought before the visible answer (700-1800+ reasoning tokens observed for prompts this size), which is why both call sites budget generously (`maxTokens: 4096`) rather than the smaller budget a non-reasoning model would need for the same output - a tight budget can silently starve the visible content to empty even though the call itself succeeds. Mistral and OpenRouter both use a simple primary+fallback pair (`MISTRAL_MODEL`/`MISTRAL_FALLBACK_MODEL`, `OPENROUTER_MODEL`/`OPENROUTER_FALLBACK_MODEL`), each retried up to `OPENROUTER_MAX_RETRIES` times with exponential backoff and jitter on retryable errors (429/500/502/503/504).
 
-The browser never receives the OpenRouter API key, Jira API token, or model prompt. It receives only the sanitized result for each assessed ticket:
+**Mistral is available but not the default.** It was the default previously - measured at under 1 second for a trivial request and ~20-30 seconds for a full 25-ticket category analysis, with genuinely ticket-specific reasoning in its output. Demoted after `mistral-small-2603` was observed returning 429 (rate limited) on every attempt in the retry budget under normal use - not a one-off blip. Revisit as default if you're on a higher Mistral rate-limit tier.
+
+**NVIDIA is available but not the default.** It uses a model chain rather than a single model: `NVIDIA_MODELS` is an ordered list (defaults to `nvidia/nemotron-3.5-lightning-30b-a3b`, `deepseek-ai/deepseek-v4-flash-0731`, `openai/gpt-oss-120b`, `nvidia/nemotron-3-ultra-550b-a55b`, `moonshotai/kimi-k3` when unset), each model getting exactly one attempt (`NVIDIA_CHAIN_MAX_RETRIES=1`, no backoff) within `NVIDIA_CHAIN_TIMEOUT_MS` (default 15s) before moving to the next - breadth over depth, so one slow model can't stall the whole request by itself. In practice this hasn't been enough: NVIDIA's shared free-tier NIM endpoint has been measured taking anywhere from ~25 seconds to 3+ minutes for the *same* model and key (a queue-depth property of their infrastructure, not something tunable here), and in one live test **all 5 chained models timed out**, making a single category page take 89 seconds. Set `ESCALATION_PROVIDER=nvidia` if you have a paid/dedicated key or want to try it again once the free tier is less congested - this retry/backoff behavior is independent of and unaffected by the Mistral/OpenRouter primary+fallback pair above.
+
+If every model in the active provider's chain fails, the app silently falls back to a local heuristic analysis so the category page still renders without throwing unhandled errors. Up to `ESCALATION_ANALYSIS_LIMIT` tickets (default 25) per category are analyzed; the rest are shown unassessed.
+
+Reasoning/thinking tokens are enabled by default (`OPENROUTER_REASONING_ENABLED=true`) for OpenRouter models that support them; this flag doesn't apply to NVIDIA or Mistral.
+
+The analysis prompt includes each ticket's `pending_reason` and `severity` alongside its status/priority/comments - `pending_reason` is treated as context for *why* a ticket is stalled, not as a risk signal on its own.
+
+The browser never receives any provider API key, the Jira API token, or the model prompt. It receives only the sanitized result for each assessed ticket:
 
 - risk level
 - risk score
 - reason
 - next action
 
+Analysis results are cached in Redis for 30 minutes per ticket-set; if Redis isn't configured, analysis simply runs on every request instead of erroring.
+
+## Attachment OCR
+
+Tickets with image or PDF attachments (up to 15MB each) get those attachments OCR'd via Mistral (`MISTRAL_OCR_MODEL`, default `mistral-ocr-2512`) and the extracted text is included as `attachment_text` context in both the escalation-analysis prompt and follow-up drafts - useful for tickets where the actual problem is only described in a screenshot.
+
+This is deliberately **never in the request path**: viewing a category page or drafting a follow-up triggers OCR for any not-yet-cached attachments in the background (`next/server`'s `after()`, same pattern as the Jira snapshot write), and the *next* view picks up the cached result (`ocr:attachment:{id}` in Redis, 30-day TTL - attachment content never changes, so this effectively never needs to be recomputed). A ticket's first view after a new attachment appears won't have OCR context yet; by the next analysis cycle (30-minute cache TTL) it will. Requires Redis; silently skipped otherwise. Uses `MISTRAL_API_KEY` regardless of which provider is active in `ESCALATION_PROVIDER`.
+
 ## Jira Snapshot History
 
-Every new Jira category refresh writes the fetched rows to:
-
-```text
-data/jira-refresh-history.json
-```
-
-The file is a JSON table-style structure with:
+Every new Jira category refresh appends the fetched rows to a single Redis key, guarded by a short-lived lock so concurrent writes (normal on serverless) don't race each other. The stored structure is:
 
 - `last_cleared_at`
 - `retention_hours`
@@ -145,34 +258,94 @@ Each row includes the formatted ticket fields plus:
 - `category_title`
 - `fetched_at`
 
-Only the last 24 hours of rows are retained. A server-side scheduler starts with the Next.js process and checks hourly. When 24 hours have passed since the last clear, it clears the JSON snapshot, clears the in-memory cache, and refreshes all Jira categories again. The scheduled clear/refresh is skipped on Sundays.
+Only the last 24 hours of rows are retained. `/api/cron/refresh` is triggered hourly by Vercel Cron (see `vercel.json`) and requires a matching `Authorization: Bearer $CRON_SECRET` header. When 24 hours have passed since the last clear, it clears the snapshot, clears the cache, and refreshes all Jira categories again. The scheduled clear/refresh is skipped on Sundays. If Redis isn't configured, snapshot history and caching are simply skipped rather than erroring - the dashboard still works, just without persistence between requests.
 
-`data/` is ignored by git because it contains live Jira ticket data.
+## Follow-Up Comments
+
+Each issue's detail drawer has a "Draft follow-up" button (draft-then-confirm, never automatic):
+
+1. Clicking it calls `POST /api/tickets/[key]/followup/draft`, which asks the active **draft** provider (Claude/Anthropic by default - see [Follow-Up Draft Generation](#follow-up-draft-generation)) to draft a short, professional follow-up addressed to the right team (based on the ticket's status, `pending_reason`, and any OCR'd attachment text), falling back to a plain template message if AI drafting is disabled, unavailable, or fails.
+2. The draft appears in an editable text box. Nothing is sent until you click "Send."
+3. Sending calls `POST /api/tickets/[key]/followup/send`, which posts the (possibly edited) text as a real Jira comment via `addFollowUpComment()`, then records an audit entry and starts a cooldown (`FOLLOWUP_COOLDOWN_HOURS`, default 24h) that blocks another send on the same ticket, enforced server-side regardless of what the UI shows.
+
+**This app has no authentication.** Jira access uses one shared service-account token, so anyone who can reach a deployed URL could trigger a real Jira comment. Enable [Vercel Deployment Protection](https://vercel.com/docs/deployment-protection) (password or SSO) before deploying this feature anywhere reachable beyond your own machine.
+
+## Follow-Up Draft Generation
+
+Every follow-up/closure message (manual follow-ups, SLA follow-ups, closure candidates, CP escalations, TS product-wait follow-ups) is drafted through the same `draftViaChain()` in `src/lib/followupDraft.ts`, on its own provider axis (`DRAFT_PROVIDER`, independent from `ESCALATION_PROVIDER` - see [AI Escalation Triage](#ai-escalation-triage)).
+
+**Claude (Anthropic) is the default draft provider**, model `claude-haiku-4-5-20251001` (`ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL`). `src/lib/llmClient.ts` translates the same internal `ChatMessage`/`ToolCall` currency every other provider uses into Anthropic's Messages API shape (`x-api-key`/`anthropic-version` headers, a top-level `system` field, `tool_use`/`tool_result` content blocks) and back, so every caller above `callChatCompletionRaw()` - including the tool-calling loop - stays provider-agnostic.
+
+**Prompt caching:** each draft's instruction preamble (role, formatting rules, audience/intent framing) is built as a separate, per-ticket-interpolation-free `systemPrompt` string and sent as an Anthropic cached content block (`cache_control: { type: "ephemeral" }`); only the small per-ticket JSON payload (key, summary, reporter, comments, ...) is a plain user message priced at full input rate. Since one cron run drafts dozens of CP escalations or dozens of external product-wait follow-ups that share the same (kind, audience, intent) combination, most of a batch's calls hit Anthropic's ~5-minute prompt cache instead of paying full input price - see the "Live-verified count" note in `src/lib/cpEscalation.ts` for the real batch sizes this run into.
+
+**Draft variety:** every system prompt ends with an explicit "write like a real person, not a template" instruction, and drafts sample at `temperature: 0.7` (up from a near-deterministic `0.1` default) - both aimed at the same problem, that near-zero-temperature, template-shaped prompts produced messages reading as interchangeable across different tickets. The **fallback templates** (used when AI drafting is disabled, unavailable, or fails) are pooled into 2-3 phrasing variants per message kind and picked deterministically per ticket via `pickVariant()` in `src/lib/textVariety.ts` (a hash of the issue key), so a batch of fallback messages doesn't all read as the exact same string either - `productWaitFollowup.ts`'s external path additionally varies by follow-up ordinal (1st/2nd/3rd+) on top of that, since a client on their 3rd follow-up should never see the same message a 1st-time recipient sees.
+
+`checkExternalMessageSafety()` (`src/lib/messageSafety.ts`) is unaffected by any of the above - it's a deterministic regex backstop checked after generation regardless of provider, temperature, or which variant was drafted.
+
+## SLA Follow-Ups
+
+`/sla-followups` surfaces TS tickets (status "Waiting for Client") that have gone 3+ days without progress, for two independent reasons that can each trigger a follow-up:
+
+- **No response from reporter** - the ticket hasn't been updated in 3+ days.
+- **Linked CP ticket not worked** - the TS ticket links to a CP (Prod team) ticket (any Jira issue-link type; in practice almost always "Action item") that isn't resolved and is either unassigned, still in `Backlog`/`Selected For Sprint`, or hasn't been updated in 3+ days itself.
+
+Like the manual follow-up feature, **every step requires a human to click "Send"** - the scan only surfaces candidates and drafts messages; nothing is posted or closed unattended. There are two stages, tracked via the same Redis audit log the manual follow-up button writes to (`src/lib/followupAudit.ts`, entries tagged `sla_stage_1`/`sla_stage_2`):
+
+1. **Stage 1** - a polite first check-in, drafted with awareness of *why* it's stalled (waiting on the reporter vs. still being worked internally via the linked CP ticket).
+2. **Stage 2** - surfaces once a stage-1 follow-up is itself 3+ days old with the ticket still not Done. The draft is a **closure** message if the linked CP has since resolved, or a **final notice** otherwise - either way, clicking "Send & mark Done" posts the comment *and* transitions the ticket to Jira's "Done" status in one confirmed action (`transitionIssueToDone()` looks up the issue's actual available transitions rather than assuming a fixed transition id, since these differ by issue type/workflow; if no exact "Done"-named transition is found, or Jira rejects it, the comment still posts and the response reports the failure back to the UI rather than silently doing nothing).
+
+**Addressing** is driven by Jira's own `reporter.accountType` field - `"customer"` (external) gets addressed by name in the drafted prose; anything else (internal/employee) gets a real Jira `mention` ADF node (not literal `@name` text, which wouldn't notify anyone) via a `{{MENTION}}` placeholder the LLM is instructed to use, substituted at send time (falls back to addressing by name if an internal reporter is somehow missing an accountId - see `scripts/test-jira-comment-adf.ts`).
+
+**Known approximations, not precise tracking:** "no response from reporter" is approximated as "the ticket hasn't been updated at all" rather than precisely attributing comment authorship - a support agent's own comment would also reset this clock. "No activity" on the linked CP ticket is the same approximation. Review the candidate list before drafting rather than trusting the reason label blindly.
+
+## Closure Candidates
+
+`/closure-candidates` (`src/lib/closureCandidates.ts`) surfaces open TS tickets whose underlying problem looks already resolved, via two independent signals: a linked CP ticket resolving, or an AI similarity pass finding a near-identical past ticket that was already fixed. Same draft-then-confirm contract as everywhere else - a candidate is a suggestion, nothing closes without a human clicking Send.
+
+**Multi-CP-aware, Story-negated:** a TS ticket can have more than one linked CP ticket (any Jira issue-link type - Action item, Problem/Incident, etc. are all treated the same). `classifyIssue()` requires **every** linked CP to be resolved before treating the ticket as closable - one of several linked CPs resolving is not enough, since the others may still represent open work. **Story-type linked CPs are excluded from this check entirely** (neither required to be resolved, nor able to block on their own), since a Story tracks planned work rather than a blocking bug/task; if every linked CP on a ticket happens to be a Story, this signal contributes nothing and the ticket falls through to the AI similarity check instead, same as having no linked CP at all. See `scripts/test-closure-logic.ts` for the exact boundary cases (partial resolution, full resolution, Story-only).
+
+## Slack Mentions
+
+`/api/slack/events` is a Slack Events API webhook: when a message in a public channel mentions a ticket key (`TS-1234`, `CP-1234`), the app records the mention in Redis and a "Mentioned in Slack" badge appears in that ticket's detail drawer, linking back to the channel.
+
+Setup (outside this codebase):
+
+1. Create a Slack app in your workspace with Event Subscriptions enabled, Request URL set to `https://<your-deployment>/api/slack/events`, subscribed to the `message.channels` bot event, and scopes `channels:history` + `channels:read`.
+2. Copy the app's Signing Secret into `SLACK_SIGNING_SECRET`.
+3. Invite the bot to each channel you want watched - Slack only delivers `message.channels` events for channels the bot has joined; this app does not auto-join channels.
+
+Every request is signature-verified (HMAC-SHA256 over the raw body, using the timestamp + signing secret, rejecting anything older than 5 minutes) before any processing happens - see `src/lib/slackSignature.ts` and `npm run test:slack`. This requires the app to already be deployed at a public HTTPS URL; it cannot be exercised end-to-end locally.
 
 ## UI Design & Theming
 
-The interface follows the [Argon Dashboard](https://github.com/creativetimofficial/argon-dashboard-tailwind) visual language:
+The interface is a Kibana/Jira-inspired enterprise operations console, not a marketing-style admin template:
 
-- Sticky top navigation bar with a branded mark
-- Gradient hero banner on every page
-- Rounded stat cards with colored icons
-- Soft-shadow cards and tables
-- Accessible focus-visible states
-- Skip link for keyboard users
+- Fixed left sidebar (collapsible) grouping Dashboard / Issues (the four categories) / Operations (SLA Follow-Ups, History), active-route aware
+- Compact top header: breadcrumb, a ticket-key jump search (`TS-12345`/`CP-12345` opens the ticket in Jira directly), refresh/theme/user
+- Dense, sortable, filterable issues table per category (`IssueTable`/`IssueWorkspace`) instead of large cards - click a row to open a right-side detail drawer (`IssueDrawer`) rather than navigating away
+- Compact KPI strips (`KpiStrip`) and real-data breakdown bars (`BreakdownBars`) for status/priority/category distribution - no fabricated metrics or charts backed by data the app doesn't actually have
+- Bordered, low-radius panels instead of large rounded cards or gradients; shadows reserved for the drawer and dropdown menus
+- Accessible focus-visible states, skip link, and Escape-to-close on the drawer
 
 Light and dark modes are supported through CSS `color-scheme` and a persisted manual toggle. The selected theme is applied before first paint via an inline script in `app/layout.tsx`, so there is no flash of unstyled content. The toggle also reacts to system preference changes when the user has not made an explicit choice.
 
 ## Ticket Fields Displayed
 
-`src/lib/jiraClient.ts` now fetches a wider set of Jira fields from `all_filed.json`. `TicketCard` displays the most useful ones:
+`src/lib/jiraClient.ts` fetches a wide set of Jira fields from `all_filed.json`. The table (`IssueTable`) shows the scannable subset needed to triage at a glance:
 
-- Project, issue type, status, priority, severity
-- Support category, client support task type, urgency
-- Source, team, due date
+- Ticket key + project, summary, category, POD/team
+- Priority, status (+ pending reason), AI risk
+- Assignee, reporter (+ external/internal), created date, age, last updated
+- Linked CP issue + its status
+
+Clicking a row opens the detail drawer (`IssueDrawer`) with everything else:
+
+- Severity, urgency, source, task type, due date, major incident, affected services
+- Components and labels
 - Comment, attachment, and subtask counts
-- Labels and components
-- Truncated description
-- AI escalation insight (when OpenRouter is enabled)
+- Full description
+- AI escalation insight (when the active provider is enabled)
+- The draft/send follow-up action and Slack mention badge, if any
 
 ## Graphify Project Graph
 
@@ -197,8 +370,8 @@ Main Graphify findings:
 - `DashboardPage()` calls `getDashboardTiles()`, `getCurrentUser()`, `getCategoryCacheMeta()`, and `getJiraSnapshotSummary()`.
 - `CategoryPage()` calls `getCategoryIssues()`, `getCategoryCacheMeta()`, and `analyzeEscalationRisk()`.
 - `getCategoryIssues()` uses `getCache()` and `setCache()` to cache Jira category results.
-- `register()` in `instrumentation.ts` starts `startJiraRefreshScheduler()`.
-- Core graph hubs are `callOpenRouter()` (15 edges), `analyzeEscalationRisk()` (14 edges), and `FormattedIssue` (9 edges) — escalation triage is the most connected subsystem.
+- ~~`register()` in `instrumentation.ts` starts `startJiraRefreshScheduler()`~~ - superseded: the scheduler is now triggered by Vercel Cron hitting `/api/cron/refresh`, and `instrumentation.ts` no longer exists. Run `graphify update .` to refresh this section.
+- Core graph hubs are `callOpenRouter()` (15 edges), `analyzeEscalationRisk()` (14 edges), and `FormattedIssue` (9 edges) — escalation triage is the most connected subsystem. (Pre-dates the `llmClient.ts` extraction; re-run graphify to update.)
 - `FormattedIssue` is the main cross-community bridge (betweenness 0.023), linking `jiraClient.ts`, `openrouterEscalation.ts`, `TicketCard.tsx`, and the test scripts.
 
 To refresh the graph after code changes:

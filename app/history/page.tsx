@@ -1,7 +1,10 @@
 import Link from "next/link";
 
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { getJiraSnapshotRows, getJiraSnapshotSummary } from "@/lib/jiraSnapshotStore";
+import { Icon } from "@/components/Icon";
+import { KpiStrip } from "@/components/KpiStrip";
+import { getSheetBacklog } from "@/lib/googleSheetBacklog";
+
+import type { KpiItem } from "@/components/KpiStrip";
 
 export const dynamic = "force-dynamic";
 
@@ -26,106 +29,114 @@ function formatDate(value: string): string {
 }
 
 export default async function HistoryPage(): Promise<React.ReactElement> {
-  const [rows, summary] = await Promise.all([
-    getJiraSnapshotRows(),
-    getJiraSnapshotSummary(),
-  ]);
-  const sortedRows = [...rows].sort((a, b) => b.fetched_at.localeCompare(a.fetched_at));
+  const data = await getSheetBacklog();
+  const rows = [...data.followups].sort((a, b) =>
+    b.generatedAt.localeCompare(a.generatedAt),
+  );
+  const tsCount = rows.filter((row) =>
+    row.ticketType.toUpperCase().startsWith("TS"),
+  ).length;
+  const cpCount = rows.filter((row) =>
+    row.ticketType.toUpperCase().startsWith("CP"),
+  ).length;
+  const latestGeneratedAt = rows.find((row) => row.generatedAt)?.generatedAt ?? "";
+  const kpis: KpiItem[] = [
+    { label: "Source Tickets", value: data.tickets.length },
+    { label: "History Entries", value: rows.length },
+    { label: "TS Analyses", value: tsCount },
+    { label: "CP Analyses", value: cpCount },
+  ];
 
   return (
     <>
-      <a className="skip-link" href="#main-content">
-        Skip to history content
-      </a>
+      <Link className="back-link" href="/">
+        <Icon name="chevron-left" size={14} />
+        Back to dashboard
+      </Link>
 
-      <nav className="app-navbar" aria-label="Main navigation">
-        <Link className="app-brand" href="/">
-          <span className="app-brand-mark" aria-hidden="true">TS</span>
-          <span>Dashboard</span>
-        </Link>
-        <div className="app-navbar-actions">
-          <ThemeToggle />
-        </div>
-      </nav>
-
-      <main id="main-content">
-        <header className="hero-gradient">
-          <h1>Previous Refresh Data</h1>
-          <p className="subtitle">
-            Snapshot rows retained from the last {summary.retention_hours} hours.
+      <div className="page-header-row">
+        <div className="page-title-group">
+          <h1 className="page-title">History</h1>
+          <p className="page-subtitle">
+            Generated TS and CP analysis records from the AI Follow-ups sheet.
           </p>
-          <div className="refresh-info">
-            <span>Latest saved refresh: {formatDate(summary.latest_fetched_at)}</span>
+          <div className="sync-meta">
+            <span>Latest generated: {formatDate(latestGeneratedAt)}</span>
             <span aria-hidden="true">•</span>
-            <span>Last clear: {formatDate(summary.last_cleared_at)}</span>
+            <span>Source loaded: {formatDate(data.fetchedAt)}</span>
           </div>
-        </header>
-
-        <nav aria-label="Dashboard views" className="view-tabs">
-          <Link className="view-tab" href="/">
-            Current refresh
+        </div>
+        <div className="page-actions">
+          <Link className="btn" href="/sheet-followups">
+            <Icon name="bot" size={14} />
+            AI follow-ups
           </Link>
-          <Link aria-current="page" className="view-tab active" href="/history">
-            Previous refresh data
-            <span>{summary.row_count}</span>
-          </Link>
-        </nav>
+          <a
+            className="btn"
+            href={`${data.sourceUrl}#gid=957104001`}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <Icon name="external-link" size={14} />
+            Open history sheet
+          </a>
+        </div>
+      </div>
 
-        <section aria-label="Snapshot statistics" className="history-grid">
-          <div className="history-stat">
-            <span className="meta-label">Rows</span>
-            <strong>{summary.row_count}</strong>
-          </div>
-          <div className="history-stat">
-            <span className="meta-label">Categories</span>
-            <strong>{summary.categories.length}</strong>
-          </div>
-          <div className="history-stat">
-            <span className="meta-label">Retention</span>
-            <strong>{summary.retention_hours}h</strong>
-          </div>
-        </section>
+      <KpiStrip items={kpis} />
 
-        <section aria-label="Snapshot rows" className="history-table-wrap">
-          {sortedRows.length === 0 ? (
-            <div className="empty-state">No previous refresh rows saved yet.</div>
-          ) : (
-            <table className="history-table">
-              <caption className="visually-hidden">
-                Previous refresh snapshot rows
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Fetched</th>
-                  <th scope="col">Category</th>
-                  <th scope="col">Ticket</th>
-                  <th scope="col">Summary</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Priority</th>
-                  <th scope="col">Reporter</th>
+      {rows.length === 0 ? (
+        <div className="empty-state">
+          The source backlog loaded successfully with {data.tickets.length} tickets. Generated
+          history will appear here after the next scheduled GPT-5.5 analysis run.
+        </div>
+      ) : (
+        <div className="table-scroll">
+          <table className="data-table">
+            <caption className="visually-hidden">Scheduled AI analysis history</caption>
+            <thead>
+              <tr>
+                <th scope="col">Generated</th>
+                <th scope="col">Type</th>
+                <th scope="col">Ticket</th>
+                <th scope="col">Summary</th>
+                <th scope="col">Assignee</th>
+                <th scope="col">Status</th>
+                <th scope="col">Follow-up State</th>
+                <th scope="col">Recommended Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={`${row.key}-${row.generatedAt}-${index}`}>
+                  <td className="cell-muted">{formatDate(row.generatedAt)}</td>
+                  <td className="cell-muted">{row.ticketType || "—"}</td>
+                  <td>
+                    <a
+                      className="ticket-key-link"
+                      href={
+                        row.sourceLink ||
+                        `https://certifyos.atlassian.net/browse/${row.key}`
+                      }
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {row.key}
+                    </a>
+                  </td>
+                  <td className="cell-summary wrap-cell" title={row.summary}>
+                    {row.summary || "—"}
+                  </td>
+                  <td className="cell-muted">{row.assignee || "Unassigned"}</td>
+                  <td className="cell-muted">{row.status || "—"}</td>
+                  <td className="cell-muted">{row.followupState || "—"}</td>
+                  <td className="wrap-cell">{row.recommendedAction || "—"}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {sortedRows.map((row, index) => (
-                  <tr key={`${row.fetched_at}-${row.category_key}-${row.key}-${index}`}>
-                    <td>{formatDate(row.fetched_at)}</td>
-                    <td>{row.category_title}</td>
-                    <td>
-                      <a href={row.url} rel="noreferrer" target="_blank">
-                        {row.key}
-                      </a>
-                    </td>
-                    <td>{row.summary}</td>
-                    <td>{row.status}</td>
-                    <td>{row.priority}</td>
-                    <td>{row.reporter}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-      </main>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </>
   );
 }

@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import { getCache, getCacheMeta, setCache } from "@/lib/cache";
 import { saveCategorySnapshot } from "@/lib/jiraSnapshotStore";
 
@@ -7,6 +9,7 @@ const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN;
 
 interface JiraAccount {
   accountId?: string;
+  accountType?: string;
   displayName?: string;
   emailAddress?: string;
 }
@@ -34,14 +37,39 @@ interface JiraProgress {
   total?: number;
 }
 
+interface JiraAttachment {
+  content?: string;
+  filename?: string;
+  id?: string;
+  mimeType?: string;
+  size?: number;
+}
+
+interface JiraLinkedIssue {
+  fields?: {
+    /* Jira Cloud always embeds issuetype on a linked issue's fields
+       regardless of what was requested for the primary issue (confirmed
+       live) - no extra per-CP fetch needed to check a linked CP's type. */
+    issuetype?: JiraNamedField | null;
+    status?: JiraStatus | null;
+  };
+  key?: string;
+}
+
+interface JiraIssueLink {
+  inwardIssue?: JiraLinkedIssue;
+  outwardIssue?: JiraLinkedIssue;
+}
+
 interface JiraIssueFields {
   assignee?: JiraAccount | null;
-  attachment?: unknown[];
+  attachment?: JiraAttachment[];
   comment?: { comments?: unknown[] };
   components?: Array<{ name?: string }>;
   created?: string;
   description?: string;
   duedate?: string;
+  issuelinks?: JiraIssueLink[];
   issuetype?: JiraNamedField | null;
   labels?: string[];
   priority?: JiraNamedField | null;
@@ -97,11 +125,28 @@ export interface DashboardTile {
   title: string;
 }
 
+export interface OcrEligibleAttachment {
+  contentUrl: string;
+  filename: string;
+  id: string;
+  mimeType: string;
+  size: number;
+}
+
+export interface LinkedCpIssue {
+  isDone: boolean;
+  issueType?: string;
+  key: string;
+  status: string;
+}
+
 export interface FormattedIssue {
   action_date?: string;
   affected_services?: string;
   assignee: string;
+  assignee_account_id?: string;
   attachment_count: number;
+  attachments: OcrEligibleAttachment[];
   client_support_task_type?: string;
   comment_count: number;
   components: string[];
@@ -113,6 +158,12 @@ export interface FormattedIssue {
   key: string;
   labels: string[];
   latest_comment_created: string;
+  linked_cp_issue?: LinkedCpIssue;
+  /* Every CP-project ticket linked on either side of any link type, not just
+     the first one linked_cp_issue collapses down to - closureCandidates.ts
+     needs the full set to require ALL (non-Story) linked CPs resolved before
+     treating a TS ticket as closable, not just one of several. */
+  linked_cp_issues?: LinkedCpIssue[];
   major_incident?: string;
   pending_reason?: string;
   priority: string;
@@ -120,6 +171,8 @@ export interface FormattedIssue {
   progress?: string;
   project?: string;
   reporter: string;
+  reporter_account_id?: string;
+  reporter_is_external: boolean;
   severity?: string;
   source?: string;
   status?: string;
@@ -207,6 +260,49 @@ async function jiraGet<T>(
   return (await response.json()) as T;
 }
 
+async function jiraPost<T>(path: string, body: unknown): Promise<T> {
+  const { apiToken, baseUrl, email } = requireJiraConfig();
+  const normalizedPath = path.replace(/^\/+/, "");
+  const url = new URL(`${baseUrl}/rest/api/3/${normalizedPath}`);
+
+  const response = await fetch(url, {
+    body: JSON.stringify(body),
+    headers: {
+      Accept: "application/json",
+      Authorization: `Basic ${Buffer.from(`${email}:${apiToken}`).toString("base64")}`,
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!response.ok) {
+    const responseBody = await response.text();
+    console.error("Jira error:", response.status);
+    console.error(responseBody);
+    throw new Error(`Jira request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+}
+
+export async function downloadAttachment(contentUrl: string): Promise<Buffer> {
+  const { apiToken, email } = requireJiraConfig();
+
+  const response = await fetch(contentUrl, {
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${email}:${apiToken}`).toString("base64")}`,
+    },
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Jira attachment download failed with status ${response.status}`);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
 export async function getCurrentUser(): Promise<CurrentUser> {
   const data = await jiraGet<JiraAccount>("/myself");
 
@@ -235,6 +331,7 @@ const JIRA_FIELDS = [
   "subtasks",
   "project",
   "progress",
+  "issuelinks",
   "customfield_10039",
   "customfield_10042",
   "customfield_10043",
@@ -280,6 +377,249 @@ export async function getTicketCommentContext(
         : JSON.stringify(comment.body ?? ""),
     created: comment.created ?? "",
   }));
+}
+
+interface AdfMentionNode {
+  attrs?: {
+    id?: string;
+    text?: string;
+  };
+  content?: AdfMentionNode[];
+  type?: string;
+}
+
+export interface CommentMention {
+  accountId: string;
+  displayName: string;
+}
+
+function collectMentions(node: AdfMentionNode, out: CommentMention[]): void {
+  if (node.type === "mention" && node.attrs?.id) {
+    out.push({
+      accountId: node.attrs.id,
+      displayName: node.attrs.text?.replace(/^@/, "") ?? node.attrs.id,
+    });
+  }
+
+  for (const child of node.content ?? []) {
+    collectMentions(child, out);
+  }
+}
+
+/**
+ * Finds the most recent comment (any author) that @-mentions at least one
+ * person, and returns everyone mentioned there - used to find who to
+ * re-escalate to on an unassigned CP ticket ("someone already tagged a
+ * person informally, keep pinging that same person"). Different question
+ * from latestCommentMentionsReporter() above (which only checks whether the
+ * ticket's own reporter specifically was mentioned, for TS/CP actionability)
+ * - kept separate rather than merged, since actionability and "who to
+ * escalate to" are genuinely different questions with different answers.
+ */
+/**
+ * Pure ADF-walking half of getLatestCommentMentions() below, separated out
+ * so the mention-extraction logic (the part actually worth testing
+ * carefully) can be unit-tested with constructed comment fixtures instead
+ * of needing a live Jira call - jiraGet()'s config check happens against
+ * module-level constants captured at import time, so mocking JIRA_BASE_URL
+ * etc. via process.env after the fact has no effect on it.
+ */
+export function extractLatestMentionFromComments(
+  comments: Array<{ body?: unknown }>,
+): CommentMention[] {
+  for (let i = comments.length - 1; i >= 0; i -= 1) {
+    const body = comments[i]?.body;
+
+    if (!body || typeof body !== "object") {
+      continue;
+    }
+
+    const mentions: CommentMention[] = [];
+    collectMentions(body, mentions);
+
+    if (mentions.length > 0) {
+      return mentions;
+    }
+  }
+
+  return [];
+}
+
+export async function getLatestCommentMentions(issueKey: string): Promise<CommentMention[]> {
+  const comments = await getIssueComments(issueKey);
+  return extractLatestMentionFromComments(comments);
+}
+
+export async function getIssueByKey(issueKey: string): Promise<FormattedIssue | null> {
+  const escapedKey = issueKey.replace(/"/g, '\\"');
+  const issues = await searchIssues(`key = "${escapedKey}"`, 1);
+  const issue = issues[0];
+
+  return issue ? formatIssue(issue) : null;
+}
+
+export interface IssueSummary {
+  key: string;
+  priority: string;
+  status?: string;
+  summary?: string;
+  updated?: string;
+}
+
+/**
+ * Lightweight JQL search for AI tool-calling use (see src/lib/agentTools.ts)
+ * - trimmed fields only, so a tool result stays small in the model's
+ * context. Use getIssueByKey() when full detail on one specific ticket is
+ * actually needed.
+ */
+export async function searchIssuesSummary(jql: string, maxResults = 5): Promise<IssueSummary[]> {
+  const issues = await searchIssues(jql, maxResults);
+
+  return issues.map((issue) => {
+    const formatted = formatIssue(issue);
+    return {
+      key: formatted.key,
+      priority: formatted.priority,
+      status: formatted.status,
+      summary: formatted.summary,
+      updated: formatted.updated,
+    };
+  });
+}
+
+interface JiraCommentResponse {
+  id: string;
+}
+
+export const MENTION_PLACEHOLDER = "{{MENTION}}";
+
+/**
+ * Splits `text` on MENTION_PLACEHOLDER and builds an ADF paragraph with a
+ * real `mention` node in its place, when `mentionAccountId` is given. A
+ * literal "@name" or "[~accountid:...]" in plain text does NOT create a
+ * working Jira mention (no notification, no link) - it has to be this node
+ * type. Falls back to a single plain-text node if there's no placeholder or
+ * no mentionAccountId.
+ */
+export function buildCommentAdfContent(
+  text: string,
+  mentionAccountId?: string,
+): Array<Record<string, unknown>> {
+  if (!mentionAccountId || !text.includes(MENTION_PLACEHOLDER)) {
+    return [{ text, type: "text" }];
+  }
+
+  const [before, ...rest] = text.split(MENTION_PLACEHOLDER);
+  const after = rest.join(MENTION_PLACEHOLDER);
+  const content: Array<Record<string, unknown>> = [];
+
+  if (before) {
+    content.push({ text: before, type: "text" });
+  }
+
+  content.push({ attrs: { id: mentionAccountId }, type: "mention" });
+
+  if (after) {
+    content.push({ text: after, type: "text" });
+  }
+
+  return content;
+}
+
+export async function addFollowUpComment(
+  issueKey: string,
+  text: string,
+  mentionAccountId?: string,
+): Promise<{ id: string }> {
+  const response = await jiraPost<JiraCommentResponse>(`/issue/${issueKey}/comment`, {
+    body: {
+      content: [
+        {
+          content: buildCommentAdfContent(text, mentionAccountId),
+          type: "paragraph",
+        },
+      ],
+      type: "doc",
+      version: 1,
+    },
+  });
+
+  return { id: response.id };
+}
+
+interface JiraTransition {
+  id: string;
+  name: string;
+  to?: {
+    name?: string;
+    statusCategory?: { key?: string };
+  };
+}
+
+async function getAvailableTransitions(issueKey: string): Promise<JiraTransition[]> {
+  const data = await jiraGet<{ transitions?: JiraTransition[] }>(`/issue/${issueKey}/transitions`);
+  return data.transitions ?? [];
+}
+
+export type TransitionToDoneResult =
+  | { transitioned: true }
+  | { reason: string; transitioned: false };
+
+/**
+ * Transitions are workflow-specific (the id that reaches "Done" for one issue
+ * type/project is not guaranteed to be the same for another), so this always
+ * looks up the issue's own available transitions rather than assuming a
+ * fixed id, and only acts on an exact "Done" status name match - it will not
+ * guess at a same-category status like "Closed"/"Released" instead.
+ */
+export async function transitionIssueToDone(issueKey: string): Promise<TransitionToDoneResult> {
+  const transitions = await getAvailableTransitions(issueKey);
+  const doneTransition = transitions.find((transition) => transition.to?.name?.toLowerCase() === "done");
+
+  if (!doneTransition) {
+    return { reason: `No transition to a "Done" status is available for ${issueKey}.`, transitioned: false };
+  }
+
+  try {
+    await jiraPost(`/issue/${issueKey}/transitions`, {
+      transition: { id: doneTransition.id },
+    });
+    return { transitioned: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { reason: `Failed to transition ${issueKey} to Done: ${message}`, transitioned: false };
+  }
+}
+
+export interface LinkedCpDetail {
+  assigneeEmpty: boolean;
+  isStale: boolean;
+  key: string;
+  status: string;
+}
+
+/** Extra per-CP-issue fetch for the "not assigned or worked on" check - the
+ * embedded issuelinks data (see getLinkedCpIssue) only carries status, not
+ * assignee/updated. Only called for the small subset of tickets that already
+ * have a linked CP issue, never in bulk. */
+export async function getLinkedCpDetail(cpKey: string): Promise<LinkedCpDetail | null> {
+  try {
+    const issue = await jiraGet<JiraIssue>(`/issue/${cpKey}`, {
+      fields: "assignee,status,updated",
+    });
+    const updated = issue.fields.updated;
+    const daysSinceUpdate = updated ? (Date.now() - Date.parse(updated)) / 86_400_000 : Infinity;
+
+    return {
+      assigneeEmpty: !issue.fields.assignee,
+      isStale: daysSinceUpdate >= 3,
+      key: cpKey,
+      status: issue.fields.status?.name ?? "Unknown",
+    };
+  } catch (error) {
+    console.warn(`Failed to fetch linked CP detail for ${cpKey}:`, error);
+    return null;
+  }
 }
 
 async function latestCommentIsFromReporter(
@@ -362,7 +702,36 @@ function formatArrayField(items: Array<{ name?: string }> | undefined): string[]
   return items.map((item) => item.name ?? "").filter(Boolean);
 }
 
-function truncateText(text: unknown, maxLength = 240): string | undefined {
+const MAX_OCR_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+
+function isOcrEligibleMimeType(mimeType: string): boolean {
+  return mimeType.startsWith("image/") || mimeType === "application/pdf";
+}
+
+function getOcrEligibleAttachments(
+  attachments: JiraAttachment[] | undefined,
+): OcrEligibleAttachment[] {
+  if (!Array.isArray(attachments)) {
+    return [];
+  }
+
+  return attachments
+    .filter(
+      (attachment): attachment is Required<Pick<JiraAttachment, "content" | "filename" | "id" | "mimeType">> & JiraAttachment =>
+        Boolean(attachment.id && attachment.content && attachment.filename && attachment.mimeType),
+    )
+    .filter((attachment) => isOcrEligibleMimeType(attachment.mimeType))
+    .filter((attachment) => (attachment.size ?? 0) <= MAX_OCR_ATTACHMENT_BYTES)
+    .map((attachment) => ({
+      contentUrl: attachment.content,
+      filename: attachment.filename,
+      id: attachment.id,
+      mimeType: attachment.mimeType,
+      size: attachment.size ?? 0,
+    }));
+}
+
+export function truncateText(text: unknown, maxLength = 240): string | undefined {
   if (typeof text !== "string" || text.length === 0) {
     return undefined;
   }
@@ -370,6 +739,46 @@ function truncateText(text: unknown, maxLength = 240): string | undefined {
     return text;
   }
   return `${text.slice(0, maxLength).trim()}…`;
+}
+
+function toLinkedCpIssue(linked: JiraLinkedIssue): LinkedCpIssue | undefined {
+  if (!linked.key?.startsWith("CP-")) {
+    return undefined;
+  }
+
+  const status = linked.fields?.status;
+
+  return {
+    isDone: status?.statusCategory?.key === "done",
+    issueType: linked.fields?.issuetype?.name,
+    key: linked.key,
+    status: status?.name ?? "Unknown",
+  };
+}
+
+/** Every CP-project issue linked on either side of any link type (Action item, Problem/Incident, etc. all observed in practice). */
+function getAllLinkedCpIssues(links: JiraIssueLink[] | undefined): LinkedCpIssue[] {
+  if (!Array.isArray(links)) {
+    return [];
+  }
+
+  const results: LinkedCpIssue[] = [];
+
+  for (const link of links) {
+    const linked = link.inwardIssue ?? link.outwardIssue;
+    const cpIssue = linked ? toLinkedCpIssue(linked) : undefined;
+
+    if (cpIssue) {
+      results.push(cpIssue);
+    }
+  }
+
+  return results;
+}
+
+/** First linked CP-project issue found on either side of any link type (Action item, Problem/Incident, etc. all observed in practice - the SLA follow-up feature only cares that a CP ticket is linked, not which link type). Most callers want this single-result convenience; closureCandidates.ts uses getAllLinkedCpIssues instead since it must not silently drop additional linked CPs. */
+function getLinkedCpIssue(links: JiraIssueLink[] | undefined): LinkedCpIssue | undefined {
+  return getAllLinkedCpIssues(links)[0];
 }
 
 function formatIssue(
@@ -392,7 +801,11 @@ function formatIssue(
     action_date: latestComment?.created ?? fields.updated,
     affected_services: getServiceArrayValue(fields.customfield_10039),
     assignee: fields.assignee?.displayName ?? "Unassigned",
+    assignee_account_id: fields.assignee?.accountId,
     attachment_count: fields.attachment?.length ?? 0,
+    attachments: getOcrEligibleAttachments(fields.attachment),
+    linked_cp_issue: getLinkedCpIssue(fields.issuelinks),
+    linked_cp_issues: getAllLinkedCpIssues(fields.issuelinks),
     client_support_task_type: getOptionValue(fields.customfield_10287),
     comment_count: fields.comment?.comments?.length ?? 0,
     components: formatArrayField(fields.components),
@@ -411,6 +824,9 @@ function formatIssue(
     progress: getProgressValue(fields.progress),
     project: fields.project?.key,
     reporter: fields.reporter?.displayName ?? "",
+    reporter_account_id: fields.reporter?.accountId,
+    /* Jira's own distinction: "customer" = Jira Service Management portal/customer account, anything else (e.g. "atlassian") = a licensed internal user. */
+    reporter_is_external: fields.reporter?.accountType === "customer",
     severity: getOptionValue(fields.customfield_10048),
     source: getOptionValue(fields.customfield_10054),
     status: fields.status?.name,
@@ -426,7 +842,54 @@ function formatIssue(
   };
 }
 
+function parseIntEnv(value: string | undefined, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/**
+ * Runs fn over items with at most `limit` in flight at once. getActionableItems
+ * needs one Jira comment-fetch per candidate ticket to decide if it's actionable
+ * - awaiting those one at a time (as this used to) turns a page load into
+ * hundreds of sequential round-trips to Jira. Unbounded Promise.all instead
+ * risks tripping Jira's rate limits, so this caps concurrency instead.
+ */
+export async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+
+      if (currentIndex >= items.length) {
+        return;
+      }
+
+      const item = items[currentIndex];
+
+      if (item !== undefined) {
+        results[currentIndex] = await fn(item);
+      }
+    }
+  }
+
+  const workerCount = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+  return results;
+}
+
 async function getActionableItems(): Promise<FormattedIssue[]> {
+  const concurrency = parseIntEnv(process.env.JIRA_FETCH_CONCURRENCY, 8);
   const results: FormattedIssue[] = [];
 
   const tsJql = `
@@ -437,16 +900,18 @@ async function getActionableItems(): Promise<FormattedIssue[]> {
     `;
   const tsIssues = await searchIssues(tsJql);
 
-  for (const issue of tsIssues) {
-    const [actionable, latestComment] = await latestCommentIsFromReporter(issue);
+  const tsResults = await mapWithConcurrency<JiraIssue, FormattedIssue | null>(
+    tsIssues,
+    concurrency,
+    async (issue) => {
+      const [actionable, latestComment] = await latestCommentIsFromReporter(issue);
+      return actionable ? { ...formatIssue(issue, latestComment), project: "TS" } : null;
+    },
+  );
 
-    if (actionable) {
-      results.push({
-        ...formatIssue(issue, latestComment),
-        project: "TS",
-      });
-    }
-  }
+  results.push(
+    ...tsResults.filter((issue): issue is FormattedIssue => issue !== null),
+  );
 
   const cpJql = `
         project = CP
@@ -456,16 +921,18 @@ async function getActionableItems(): Promise<FormattedIssue[]> {
     `;
   const cpIssues = await searchIssues(cpJql);
 
-  for (const issue of cpIssues) {
-    const [actionable, latestComment] = await latestCommentMentionsReporter(issue);
+  const cpResults = await mapWithConcurrency<JiraIssue, FormattedIssue | null>(
+    cpIssues,
+    concurrency,
+    async (issue) => {
+      const [actionable, latestComment] = await latestCommentMentionsReporter(issue);
+      return actionable ? { ...formatIssue(issue, latestComment), project: "CP" } : null;
+    },
+  );
 
-    if (actionable) {
-      results.push({
-        ...formatIssue(issue, latestComment),
-        project: "CP",
-      });
-    }
-  }
+  results.push(
+    ...cpResults.filter((issue): issue is FormattedIssue => issue !== null),
+  );
 
   results.sort((a, b) => {
     const priorityDiff = a.priority_sort - b.priority_sort;
@@ -483,6 +950,38 @@ async function getActionableItems(): Promise<FormattedIssue[]> {
 }
 
 async function getWaitingForProductTickets(): Promise<FormattedIssue[]> {
+  const tsJql = `
+        project = TS
+        AND assignee = currentUser()
+        AND statusCategory != Done
+        AND status = "Waiting for Product"
+        ORDER BY updated DESC
+    `;
+  const tsIssues = await searchIssues(tsJql);
+
+  const cpJql = `
+        project = CP
+        AND status in ("Backlog", "Selected For Sprint")
+        AND assignee = currentUser()
+        ORDER BY updated DESC
+    `;
+  const cpIssues = await searchIssues(cpJql);
+
+  const results = [...tsIssues, ...cpIssues].map((issue) => formatIssue(issue));
+
+  results.sort((a, b) => (b.updated ?? "").localeCompare(a.updated ?? ""));
+
+  return results;
+}
+
+/**
+ * TS-only "Waiting for Product" tickets, unlike getWaitingForProductTickets()
+ * above which unions in CP Backlog/Selected-for-Sprint tickets for the
+ * dashboard category view. src/lib/productWaitFollowup.ts needs the TS-only
+ * set - a CP ticket has no "reporter_is_external" concept, so mixing them in
+ * here would be meaningless for that feature.
+ */
+export async function getWaitingForProductTsOnly(): Promise<FormattedIssue[]> {
   const jql = `
         project = TS
         AND assignee = currentUser()
@@ -542,20 +1041,18 @@ export const CATEGORIES: Record<string, Category> = {
 };
 
 export async function getDashboardTiles(): Promise<DashboardTile[]> {
-  const tiles: DashboardTile[] = [];
+  return Promise.all(
+    Object.entries(CATEGORIES).map(async ([key, category]) => {
+      const [, issues] = await getCategoryIssues(key);
 
-  for (const [key, category] of Object.entries(CATEGORIES)) {
-    const [, issues] = await getCategoryIssues(key);
-
-    tiles.push({
-      count: issues.length,
-      description: category.description,
-      key,
-      title: category.title,
-    });
-  }
-
-  return tiles;
+      return {
+        count: issues.length,
+        description: category.description,
+        key,
+        title: category.title,
+      };
+    }),
+  );
 }
 
 export async function getCategoryIssues(
@@ -568,41 +1065,43 @@ export async function getCategoryIssues(
   }
 
   const cacheKey = `category:${categoryKey}`;
-  const cached = getCache<FormattedIssue[]>(cacheKey);
+  const cached = await getCache<FormattedIssue[]>(cacheKey);
 
   if (cached) {
     return [category, cached.value];
   }
 
   const issues = await category.loader();
-  setCache(cacheKey, issues);
+  await setCache(cacheKey, issues);
 
-  saveCategorySnapshot(categoryKey, category, issues).catch((error) => {
-    console.error(`Failed to persist Jira snapshot for ${categoryKey}:`, error);
-  });
+  after(() =>
+    saveCategorySnapshot(categoryKey, category, issues).catch((error) => {
+      console.error(`Failed to persist Jira snapshot for ${categoryKey}:`, error);
+    }),
+  );
 
   return [category, issues];
 }
 
 export async function refreshAllCategories(): Promise<void> {
-  for (const categoryKey of Object.keys(CATEGORIES)) {
-    const category = CATEGORIES[categoryKey];
-
-    if (category) {
+  await Promise.all(
+    Object.entries(CATEGORIES).map(async ([categoryKey, category]) => {
       const issues = await category.loader();
-      setCache(`category:${categoryKey}`, issues);
+      await setCache(`category:${categoryKey}`, issues);
 
       try {
         await saveCategorySnapshot(categoryKey, category, issues);
       } catch (error) {
         console.error(`Failed to persist Jira snapshot for ${categoryKey}:`, error);
       }
-    }
-  }
+    }),
+  );
 }
 
-export function getCategoryCacheMeta(categoryKey: string): CategoryCacheMeta {
-  const meta = getCacheMeta(`category:${categoryKey}`);
+export async function getCategoryCacheMeta(
+  categoryKey: string,
+): Promise<CategoryCacheMeta> {
+  const meta = await getCacheMeta(`category:${categoryKey}`);
 
   if (!meta) {
     return {

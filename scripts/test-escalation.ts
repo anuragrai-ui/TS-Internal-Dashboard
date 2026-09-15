@@ -10,6 +10,8 @@ function makeIssues(prefix: string): FormattedIssue[] {
     action_date: "2026-07-01",
     assignee: "Anurag Rai",
     attachment_count: 2,
+    attachments: [],
+    reporter_is_external: false,
     comment_count: 3,
     components: ["Backend"],
     key: `${prefix}-101`,
@@ -30,6 +32,8 @@ function makeIssues(prefix: string): FormattedIssue[] {
     action_date: "2026-07-02",
     assignee: "Anurag Rai",
     attachment_count: 0,
+    attachments: [],
+    reporter_is_external: false,
     comment_count: 1,
     components: ["Frontend"],
     key: `${prefix}-102`,
@@ -50,6 +54,8 @@ function makeIssues(prefix: string): FormattedIssue[] {
     action_date: "2026-07-02",
     assignee: "Anurag Rai",
     attachment_count: 0,
+    attachments: [],
+    reporter_is_external: false,
     comment_count: 0,
     components: [],
     key: `${prefix}-103`,
@@ -319,6 +325,8 @@ async function testOpenRouter503Fallback(): Promise<void> {
 async function testOpenRouterSuccess(): Promise<void> {
   console.log("\n--- Test: OpenRouter success path parses response ---");
 
+  const savedProvider = process.env.ESCALATION_PROVIDER;
+  process.env.ESCALATION_PROVIDER = "openrouter";
   process.env.OPENROUTER_ESCALATION_ENABLED = "true";
   process.env.OPENROUTER_API_KEY = "fake-key";
   process.env.OPENROUTER_MAX_RETRIES = "2";
@@ -386,25 +394,25 @@ async function testOpenRouterSuccess(): Promise<void> {
     console.log("PASS: OpenRouter success path parses and returns analyses.");
   } finally {
     globalThis.fetch = originalFetch;
+    if (savedProvider === undefined) {
+      delete process.env.ESCALATION_PROVIDER;
+    } else {
+      process.env.ESCALATION_PROVIDER = savedProvider;
+    }
   }
 }
 
-async function testHuggingFaceSuccess(): Promise<void> {
-  console.log("\n--- Test: HuggingFace router success path parses response ---");
+async function testMistralSuccess(): Promise<void> {
+  console.log("\n--- Test: Mistral success path parses response ---");
 
-  const prefix = "HF";
+  const prefix = "MST";
   const savedProvider = process.env.ESCALATION_PROVIDER;
-  const savedHfToken = process.env.HF_TOKEN;
-  const savedHfModel = process.env.HF_MODEL;
   const originalFetch = globalThis.fetch;
 
-  process.env.ESCALATION_PROVIDER = "huggingface";
+  process.env.ESCALATION_PROVIDER = "mistral";
   process.env.OPENROUTER_ESCALATION_ENABLED = "true";
-  process.env.HF_TOKEN = "fake-hf-token";
-  process.env.HF_MODEL = "google/gemma-4-31B-it:novita";
-  process.env.OPENROUTER_MAX_RETRIES = "2";
-  process.env.OPENROUTER_BASE_DELAY_MS = "50";
-  process.env.OPENROUTER_REQUEST_TIMEOUT_MS = "1000";
+  process.env.MISTRAL_API_KEY = "fake-mistral-key";
+  process.env.MISTRAL_MODEL = "mistral-small-2603";
 
   let capturedUrl = "";
   let capturedBody: Record<string, unknown> | undefined;
@@ -453,17 +461,15 @@ async function testHuggingFaceSuccess(): Promise<void> {
     const issues = makeIssues(prefix);
     const analyses = await analyzeEscalationRisk(issues, 12, makeMockGetComments(prefix));
 
-    assert(capturedUrl.includes("router.huggingface.co"), "Should call the HuggingFace endpoint");
-    assert(capturedBody?.model === "google/gemma-4-31B-it:novita", "Should send the HF model");
-    assert(capturedBody?.reasoning === undefined, "HF request must not include reasoning field");
-    assert(capturedBody?.response_format === undefined, "HF request must not include response_format field");
+    assert(capturedUrl.includes("api.mistral.ai"), "Should call the Mistral endpoint");
+    assert(capturedBody?.model === "mistral-small-2603", "Should send the configured Mistral model");
     assertEqual(analyses.length, 3, "Should return 3 analyses");
     const [a, b, c] = requireThree(analyses);
     assertEqual(a.risk_level, "immediate", `${prefix}-101 should be immediate`);
     assertEqual(b.risk_level, "watch", `${prefix}-102 should be watch`);
     assertEqual(c.risk_level, "normal", `${prefix}-103 should be normal`);
 
-    console.log("PASS: HuggingFace router success path parses and returns analyses.");
+    console.log("PASS: Mistral success path parses and returns analyses.");
   } finally {
     globalThis.fetch = originalFetch;
     if (savedProvider === undefined) {
@@ -471,79 +477,96 @@ async function testHuggingFaceSuccess(): Promise<void> {
     } else {
       process.env.ESCALATION_PROVIDER = savedProvider;
     }
-    if (savedHfToken === undefined) {
-      delete process.env.HF_TOKEN;
-    } else {
-      process.env.HF_TOKEN = savedHfToken;
-    }
-    if (savedHfModel === undefined) {
-      delete process.env.HF_MODEL;
-    } else {
-      process.env.HF_MODEL = savedHfModel;
-    }
   }
 }
 
-async function runLiveHfModel(model: string, prefix: string): Promise<void> {
-  process.env.HF_MODEL = model;
-  process.env.HF_FALLBACK_MODEL = model;
+async function testNvidiaChainFallback(): Promise<void> {
+  console.log("\n--- Test: NVIDIA model chain switches quickly on failure ---");
 
-  const issues = makeIssues(prefix);
-  const { result: analyses, warnings } = await captureWarnings(() =>
-    analyzeEscalationRisk(issues, 3, makeMockGetComments(prefix)),
-  );
-
-  const fellBackToHeuristics = warnings.some(
-    (line) => line.includes("using ML/local fallback") || line.includes("exhausted all"),
-  );
-  assert(
-    !fellBackToHeuristics,
-    `${model}: live call silently fell back instead of calling the API (${warnings.join(" | ") || "no warnings captured"})`,
-  );
-
-  assertEqual(analyses.length, 3, `${model} should return 3 live analyses`);
-  assert(analyses.every((a) => a.key && a.next_action && a.reason), `${model}: every analysis should have required fields`);
-  console.log(`PASS: ${model} live call returned analyses:`);
-  for (const a of analyses) {
-    console.log(`  ${a.key} -> ${a.risk_level} (${a.risk_score}): ${a.next_action}`);
-  }
-}
-
-async function testHuggingFaceLive(): Promise<void> {
-  const shouldRun = process.env.RUN_LIVE_HF_TEST === "true" && Boolean(process.env.HF_TOKEN);
-
-  if (!shouldRun) {
-    console.log(
-      "\n--- Test: HuggingFace live call (skipped; set RUN_LIVE_HF_TEST=true and HF_TOKEN to enable) ---",
-    );
-    return;
-  }
-
-  console.log("\n--- Test: HuggingFace router live call (both models) ---");
-
+  const prefix = "CHAIN";
   const savedProvider = process.env.ESCALATION_PROVIDER;
-  const savedEnabled = process.env.OPENROUTER_ESCALATION_ENABLED;
-  const savedHfModel = process.env.HF_MODEL;
-  const savedHfFallback = process.env.HF_FALLBACK_MODEL;
+  const savedModels = process.env.NVIDIA_MODELS;
+  const originalFetch = globalThis.fetch;
 
-  process.env.ESCALATION_PROVIDER = "huggingface";
+  process.env.ESCALATION_PROVIDER = "nvidia";
   process.env.OPENROUTER_ESCALATION_ENABLED = "true";
-  process.env.OPENROUTER_MAX_RETRIES = "3";
-  process.env.OPENROUTER_BASE_DELAY_MS = "300";
-  process.env.OPENROUTER_REQUEST_TIMEOUT_MS = "45000";
+  process.env.NVIDIA_API_KEY = "fake-nvidia-key";
+  process.env.NVIDIA_MODELS = "chain-model-a,chain-model-b";
+
+  const calledModels: string[] = [];
+  const mockFetch: typeof fetch = (_input, init) => {
+    const body = typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : {};
+    const model = String(body.model);
+    calledModels.push(model);
+
+    if (model === "chain-model-a") {
+      // Simulate the first model in the chain being unavailable (network error,
+      // timeout, or a non-2xx response) - the chain should move on immediately
+      // rather than retrying this same model, per getChainMaxRetries()=1.
+      return Promise.reject(new Error("simulated network failure"));
+    }
+
+    return Promise.resolve(new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify([
+                {
+                  key: `${prefix}-101`,
+                  next_action: "Escalate to on-call immediately.",
+                  reason: "Production outage reported by client.",
+                  risk_level: "immediate",
+                  risk_score: 90,
+                },
+                {
+                  key: `${prefix}-102`,
+                  next_action: "Ping product team for clarification.",
+                  reason: "Waiting for product requirement details.",
+                  risk_level: "watch",
+                  risk_score: 40,
+                },
+                {
+                  key: `${prefix}-103`,
+                  next_action: "Handle in normal queue.",
+                  reason: "Low priority routine task.",
+                  risk_level: "normal",
+                  risk_score: 5,
+                },
+              ]),
+            },
+          },
+        ],
+      }),
+      { status: 200, statusText: "OK" },
+    ));
+  };
+  globalThis.fetch = mockFetch;
 
   try {
-    await runLiveHfModel("google/gemma-4-31B-it:novita", "GMMA");
-    await runLiveHfModel("openai/gpt-oss-120b:novita", "OSS");
+    const issues = makeIssues(prefix);
+    const analyses = await analyzeEscalationRisk(issues, 12, makeMockGetComments(prefix));
+
+    assertEqual(calledModels, ["chain-model-a", "chain-model-b"], "Should try chain-model-a once, then move to chain-model-b");
+    assertEqual(analyses.length, 3, "Should return 3 analyses from the second model");
+    const [a, b, c] = requireThree(analyses);
+    assertEqual(a.risk_level, "immediate", `${prefix}-101 should be immediate`);
+    assertEqual(b.risk_level, "watch", `${prefix}-102 should be watch`);
+    assertEqual(c.risk_level, "normal", `${prefix}-103 should be normal`);
+
+    console.log("PASS: chain-model-a failed once and the chain switched to chain-model-b without retrying chain-model-a.");
   } finally {
-    if (savedProvider === undefined) delete process.env.ESCALATION_PROVIDER;
-    else process.env.ESCALATION_PROVIDER = savedProvider;
-    if (savedEnabled === undefined) delete process.env.OPENROUTER_ESCALATION_ENABLED;
-    else process.env.OPENROUTER_ESCALATION_ENABLED = savedEnabled;
-    if (savedHfModel === undefined) delete process.env.HF_MODEL;
-    else process.env.HF_MODEL = savedHfModel;
-    if (savedHfFallback === undefined) delete process.env.HF_FALLBACK_MODEL;
-    else process.env.HF_FALLBACK_MODEL = savedHfFallback;
+    globalThis.fetch = originalFetch;
+    if (savedProvider === undefined) {
+      delete process.env.ESCALATION_PROVIDER;
+    } else {
+      process.env.ESCALATION_PROVIDER = savedProvider;
+    }
+    if (savedModels === undefined) {
+      delete process.env.NVIDIA_MODELS;
+    } else {
+      process.env.NVIDIA_MODELS = savedModels;
+    }
   }
 }
 
@@ -555,8 +578,8 @@ async function main(): Promise<void> {
     await testDisabledOpenRouter();
     await testOpenRouter503Fallback();
     await testOpenRouterSuccess();
-    await testHuggingFaceSuccess();
-    await testHuggingFaceLive();
+    await testMistralSuccess();
+    await testNvidiaChainFallback();
     console.log("\nAll escalation tests passed.");
     process.exit(0);
   } catch (error) {

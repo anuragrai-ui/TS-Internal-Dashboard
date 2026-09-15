@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 
+import { Icon } from "@/components/Icon";
+
 type Theme = "dark" | "light";
 
 const STORAGE_KEY = "ts-dashboard-theme";
@@ -66,14 +68,11 @@ export function ThemeToggle(): React.ReactElement {
     <button
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
       aria-pressed={isDark}
-      className="theme-toggle"
+      className="header-icon-btn"
       onClick={handleToggle}
       type="button"
     >
-      <span aria-hidden="true" className="theme-toggle-track">
-        <span className="theme-toggle-thumb" />
-      </span>
-      <span>{isDark ? "Dark" : "Light"}</span>
+      <Icon name={isDark ? "moon" : "sun"} />
     </button>
   );
 }

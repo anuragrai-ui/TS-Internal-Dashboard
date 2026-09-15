@@ -11,6 +11,8 @@ export function getLocalHeuristicAnalysis(
     issue.priority,
     issue.reporter,
     issue.latest_comment_created,
+    issue.pending_reason,
+    issue.severity,
     ...comments.map((comment) => comment.body),
   ]
     .filter(Boolean)

@@ -1149,14 +1149,22 @@ textarea:focus-visible,
 }
 
 .breakdown-bar-track {
+  display: block;
   block-size: 0.4rem;
   background: var(--surface-sunken);
+  border: 1px solid var(--border);
   border-radius: var(--radius-full);
   overflow: hidden;
 }
 
 .breakdown-bar-fill {
+  /* A <span> is inline by default, and inline elements ignore width/
+     inline-size entirely - without this, the fill never actually renders at
+     its computed percentage, so every row looked like one uniform, colorless
+     track regardless of its real value. */
+  display: block;
   block-size: 100%;
+  min-inline-size: 2px;
   background: var(--accent);
   border-radius: var(--radius-full);
 }

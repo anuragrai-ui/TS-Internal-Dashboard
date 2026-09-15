@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import type { FollowUpAuditEntry, FollowUpKind } from "@/lib/followupAudit";
-import { followUpAuditLogKey, followUpCooldownKey } from "@/lib/followupAudit";
+import { followUpAuditLogKey, followUpCooldownKey, trimAndExpireAuditLog } from "@/lib/followupAudit";
 import { addFollowUpComment, getIssueByKey, JiraRequestError, transitionIssueToDone } from "@/lib/jiraClient";
 import type { JiraCredentials } from "@/lib/jiraClient";
 import { checkExternalMessageSafety } from "@/lib/messageSafety";
@@ -192,6 +192,7 @@ export async function POST(
           member: JSON.stringify(auditEntry),
           score: Date.now(),
         });
+        await trimAndExpireAuditLog(redis, key);
         await redis.set(followUpCooldownKey(key), postedAt, {
           ex: parseCooldownHours(process.env.FOLLOWUP_COOLDOWN_HOURS) * 3600,
         });

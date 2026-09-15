@@ -1,4 +1,17 @@
+import type { Redis } from "@upstash/redis";
+
 import { getRedis, isRedisConfigured } from "@/lib/redis";
+
+/* This zset previously had no cap and no TTL - every follow-up ever sent to
+   a ticket accumulated forever, the one clearly unbounded key pattern in an
+   otherwise TTL-disciplined codebase (see agentFollowupCache.ts/cache.ts/
+   the Slack-mentions zset in app/api/slack/events/route.ts, which caps at
+   10 entries + a 30-day TTL - this mirrors that same bounded-zset pattern).
+   50 entries and 180 days comfortably cover any realistic ticket's full
+   follow-up history before it's closed; a ticket still needing more than
+   that after 6 months of nudges has bigger problems than log storage. */
+const AUDIT_LOG_MAX_ENTRIES = 50;
+const AUDIT_LOG_TTL_SECONDS = 180 * 86_400;
 
 /**
  * Not a closed enum enforced by this log itself - kinds are implicitly
@@ -79,6 +92,25 @@ export function followUpCooldownKey(issueKey: string): string {
 
 export function followUpAuditLogKey(issueKey: string): string {
   return `followup:log:${issueKey}`;
+}
+
+/**
+ * Call right after zadd-ing a new entry into a ticket's audit log - trims it
+ * to the most recent AUDIT_LOG_MAX_ENTRIES (oldest-first ranks removed) and
+ * refreshes its TTL so an actively-followed-up ticket's log survives, but a
+ * ticket nobody's touched in AUDIT_LOG_TTL_SECONDS eventually ages out
+ * rather than sitting in Redis forever. Best-effort: a failure here doesn't
+ * roll back the write that already succeeded, just logs a warning.
+ */
+export async function trimAndExpireAuditLog(redis: Redis, issueKey: string): Promise<void> {
+  const key = followUpAuditLogKey(issueKey);
+
+  try {
+    await redis.zremrangebyrank(key, 0, -(AUDIT_LOG_MAX_ENTRIES + 1));
+    await redis.expire(key, AUDIT_LOG_TTL_SECONDS);
+  } catch (error) {
+    console.warn(`Failed to trim/expire the follow-up audit log for ${issueKey}.`, error);
+  }
 }
 
 export async function getFollowUpAuditEntries(issueKey: string): Promise<FollowUpAuditEntry[]> {

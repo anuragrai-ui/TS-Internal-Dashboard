@@ -1,4 +1,4 @@
-import { ALL_FOLLOW_UP_KINDS } from "@/lib/followupAudit";
+import { ALL_FOLLOW_UP_KINDS, trimAndExpireAuditLog } from "@/lib/followupAudit";
 import type { FollowUpAuditEntry } from "@/lib/followupAudit";
 import { checkExternalMessageSafety } from "@/lib/messageSafety";
 import { extractLatestMentionFromComments } from "@/lib/jiraClient";
@@ -397,6 +397,56 @@ async function testExternalDraftRejectsLeakAndFallsBackSafely(): Promise<void> {
   );
 }
 
+// --- trimAndExpireAuditLog (src/lib/followupAudit.ts) ---
+
+async function testAuditLogTrimAndExpire(): Promise<void> {
+  console.log("\n--- Test: trimAndExpireAuditLog trims to the cap and refreshes the key's TTL ---");
+
+  const calls: { args: unknown[]; name: string }[] = [];
+  const fakeRedis = {
+    expire: (...args: unknown[]) => {
+      calls.push({ args, name: "expire" });
+      return Promise.resolve(1);
+    },
+    zremrangebyrank: (...args: unknown[]) => {
+      calls.push({ args, name: "zremrangebyrank" });
+      return Promise.resolve(0);
+    },
+  };
+
+  await trimAndExpireAuditLog(fakeRedis as unknown as Parameters<typeof trimAndExpireAuditLog>[0], "TS-9001");
+
+  const trimCall = calls.find((call) => call.name === "zremrangebyrank");
+  const expireCall = calls.find((call) => call.name === "expire");
+
+  assert(Boolean(trimCall), "should call zremrangebyrank to trim old entries");
+  assertEqual(trimCall?.args[0], "followup:log:TS-9001", "should trim the correct issue's audit log key");
+  assertEqual(trimCall?.args[1], 0, "should trim starting from rank 0 (the oldest entries)");
+  assert(
+    typeof trimCall?.args[2] === "number" && trimCall.args[2] < 0,
+    "should trim up to a negative rank, keeping only the most recent N entries",
+  );
+
+  assert(Boolean(expireCall), "should refresh the key's TTL after trimming");
+  assertEqual(expireCall?.args[0], "followup:log:TS-9001", "should refresh the TTL on the same key");
+  assert(typeof expireCall?.args[1] === "number" && expireCall.args[1] > 0, "should set a positive TTL");
+
+  console.log("PASS: the audit log is both trimmed to a cap and given a refreshed TTL, not left to grow forever.");
+}
+
+async function testAuditLogTrimSurvivesRedisFailure(): Promise<void> {
+  console.log("\n--- Test: a Redis failure while trimming doesn't throw (the send already succeeded) ---");
+
+  const failingRedis = {
+    expire: () => Promise.reject(new Error("simulated Redis failure")),
+    zremrangebyrank: () => Promise.reject(new Error("simulated Redis failure")),
+  };
+
+  await trimAndExpireAuditLog(failingRedis as unknown as Parameters<typeof trimAndExpireAuditLog>[0], "TS-9001");
+
+  console.log("PASS: a trim/expire failure is swallowed (logged, not thrown) since the actual send already completed.");
+}
+
 // --- FollowUpKind / VALID_KINDS sync (app/api/tickets/[key]/followup/send/route.ts) ---
 
 function testValidKindsStaysInSync(): void {
@@ -425,6 +475,8 @@ async function main(): Promise<void> {
     await testProductWaitCadenceAndOrdinal();
     await testExternalFallbackVariesByOrdinal();
     await testExternalDraftRejectsLeakAndFallsBackSafely();
+    await testAuditLogTrimAndExpire();
+    await testAuditLogTrimSurvivesRedisFailure();
     testValidKindsStaysInSync();
     console.log("\nAll agent-followups tests passed.");
     process.exit(0);

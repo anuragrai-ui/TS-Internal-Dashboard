@@ -42,6 +42,10 @@ const NAV_GROUPS: NavGroup[] = [
     ],
     label: "Operations",
   },
+  {
+    items: [{ href: "/settings/jira-tokens", icon: "gear", label: "Jira Tokens" }],
+    label: "Settings",
+  },
 ];
 
 interface SidebarProps {

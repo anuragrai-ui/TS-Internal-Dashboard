@@ -199,21 +199,34 @@ export interface CategoryCacheMeta {
   next_sync_iso: string;
 }
 
-function requireJiraConfig(): {
+/** A per-team-member Jira Basic-auth pair (see src/lib/userJiraTokens.ts) - lets a write be posted under an individual's own Jira identity instead of the shared service account. */
+export interface JiraCredentials {
+  apiToken: string;
+  email: string;
+}
+
+function requireJiraConfig(credentials?: JiraCredentials): {
   apiToken: string;
   baseUrl: string;
   email: string;
 } {
-  if (!JIRA_BASE_URL || !JIRA_EMAIL || !JIRA_API_TOKEN) {
+  if (!JIRA_BASE_URL) {
+    throw new Error("Missing Jira configuration. Set JIRA_BASE_URL.");
+  }
+
+  const email = credentials?.email ?? JIRA_EMAIL;
+  const apiToken = credentials?.apiToken ?? JIRA_API_TOKEN;
+
+  if (!email || !apiToken) {
     throw new Error(
-      "Missing Jira configuration. Set JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN.",
+      "Missing Jira configuration. Set JIRA_EMAIL and JIRA_API_TOKEN, or pass explicit credentials.",
     );
   }
 
   return {
-    apiToken: JIRA_API_TOKEN,
+    apiToken,
     baseUrl: JIRA_BASE_URL.replace(/\/+$/, ""),
-    email: JIRA_EMAIL,
+    email,
   };
 }
 
@@ -233,8 +246,9 @@ function formatDateTime(date: Date): string {
 async function jiraGet<T>(
   path: string,
   params?: Record<string, string | number>,
+  credentials?: JiraCredentials,
 ): Promise<T> {
-  const { apiToken, baseUrl, email } = requireJiraConfig();
+  const { apiToken, baseUrl, email } = requireJiraConfig(credentials);
   const normalizedPath = path.replace(/^\/+/, "");
   const url = new URL(`${baseUrl}/rest/api/3/${normalizedPath}`);
 
@@ -254,14 +268,14 @@ async function jiraGet<T>(
     const body = await response.text();
     console.error("Jira error:", response.status);
     console.error(body);
-    throw new Error(`Jira request failed with status ${response.status}`);
+    throw new JiraRequestError(response.status, `Jira request failed with status ${response.status}`);
   }
 
   return (await response.json()) as T;
 }
 
-async function jiraPost<T>(path: string, body: unknown): Promise<T> {
-  const { apiToken, baseUrl, email } = requireJiraConfig();
+async function jiraPost<T>(path: string, body: unknown, credentials?: JiraCredentials): Promise<T> {
+  const { apiToken, baseUrl, email } = requireJiraConfig(credentials);
   const normalizedPath = path.replace(/^\/+/, "");
   const url = new URL(`${baseUrl}/rest/api/3/${normalizedPath}`);
 
@@ -280,7 +294,7 @@ async function jiraPost<T>(path: string, body: unknown): Promise<T> {
     const responseBody = await response.text();
     console.error("Jira error:", response.status);
     console.error(responseBody);
-    throw new Error(`Jira request failed with status ${response.status}`);
+    throw new JiraRequestError(response.status, `Jira request failed with status ${response.status}`);
   }
 
   return (await response.json()) as T;
@@ -303,8 +317,20 @@ export async function downloadAttachment(contentUrl: string): Promise<Buffer> {
   return Buffer.from(await response.arrayBuffer());
 }
 
-export async function getCurrentUser(): Promise<CurrentUser> {
-  const data = await jiraGet<JiraAccount>("/myself");
+/** Thrown by jiraGet/jiraPost so callers (e.g. the per-user-token fallback in the follow-up send route) can distinguish an expired/revoked personal token (401/403) from any other Jira failure. */
+export class JiraRequestError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "JiraRequestError";
+    this.status = status;
+  }
+}
+
+/** Passing `credentials` validates a specific team member's own email+token pair against Jira's own `/myself` (used when they register a personal token in Settings) instead of the shared service account. */
+export async function getCurrentUser(credentials?: JiraCredentials): Promise<CurrentUser> {
+  const data = await jiraGet<JiraAccount>("/myself", undefined, credentials);
 
   return {
     account_id: data.accountId,
@@ -530,19 +556,24 @@ export async function addFollowUpComment(
   issueKey: string,
   text: string,
   mentionAccountId?: string,
+  credentials?: JiraCredentials,
 ): Promise<{ id: string }> {
-  const response = await jiraPost<JiraCommentResponse>(`/issue/${issueKey}/comment`, {
-    body: {
-      content: [
-        {
-          content: buildCommentAdfContent(text, mentionAccountId),
-          type: "paragraph",
-        },
-      ],
-      type: "doc",
-      version: 1,
+  const response = await jiraPost<JiraCommentResponse>(
+    `/issue/${issueKey}/comment`,
+    {
+      body: {
+        content: [
+          {
+            content: buildCommentAdfContent(text, mentionAccountId),
+            type: "paragraph",
+          },
+        ],
+        type: "doc",
+        version: 1,
+      },
     },
-  });
+    credentials,
+  );
 
   return { id: response.id };
 }
@@ -556,8 +587,15 @@ interface JiraTransition {
   };
 }
 
-async function getAvailableTransitions(issueKey: string): Promise<JiraTransition[]> {
-  const data = await jiraGet<{ transitions?: JiraTransition[] }>(`/issue/${issueKey}/transitions`);
+async function getAvailableTransitions(
+  issueKey: string,
+  credentials?: JiraCredentials,
+): Promise<JiraTransition[]> {
+  const data = await jiraGet<{ transitions?: JiraTransition[] }>(
+    `/issue/${issueKey}/transitions`,
+    undefined,
+    credentials,
+  );
   return data.transitions ?? [];
 }
 
@@ -572,8 +610,11 @@ export type TransitionToDoneResult =
  * fixed id, and only acts on an exact "Done" status name match - it will not
  * guess at a same-category status like "Closed"/"Released" instead.
  */
-export async function transitionIssueToDone(issueKey: string): Promise<TransitionToDoneResult> {
-  const transitions = await getAvailableTransitions(issueKey);
+export async function transitionIssueToDone(
+  issueKey: string,
+  credentials?: JiraCredentials,
+): Promise<TransitionToDoneResult> {
+  const transitions = await getAvailableTransitions(issueKey, credentials);
   const doneTransition = transitions.find((transition) => transition.to?.name?.toLowerCase() === "done");
 
   if (!doneTransition) {
@@ -581,9 +622,13 @@ export async function transitionIssueToDone(issueKey: string): Promise<Transitio
   }
 
   try {
-    await jiraPost(`/issue/${issueKey}/transitions`, {
-      transition: { id: doneTransition.id },
-    });
+    await jiraPost(
+      `/issue/${issueKey}/transitions`,
+      {
+        transition: { id: doneTransition.id },
+      },
+      credentials,
+    );
     return { transitioned: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

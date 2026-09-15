@@ -29,6 +29,45 @@ The UI is a Kibana/Jira-inspired enterprise operations console: a fixed left sid
 - A Vercel deployment with `CRON_SECRET` set, to run the scheduled refresh
 - Optionally, a Slack app (Event Subscriptions + Signing Secret) for the Slack-mention feature - see [Slack Mentions](#slack-mentions)
 
+## Quick Setup
+
+Everything below is a one-time setup step done outside this codebase, then pasted into `.env` (local) or your Vercel project's environment variables (deployed). Nothing here requires touching code. Ordered by what actually blocks the app from working at all, down to what's purely optional.
+
+**1. Jira (required - nothing works without this)**
+Already covered if you're reading this after cloning: `JIRA_BASE_URL`, `JIRA_EMAIL`, and a classic Jira API token (`id.atlassian.com/manage-profile/security/api-tokens` → Create API token → paste into `JIRA_API_TOKEN`). This is the one shared service-account identity every Jira read, and every write nobody's personally registered a token for (see step 5), uses.
+
+**2. Redis - Upstash (strongly recommended; the app runs without it, but nothing persists)**
+Without Redis, every cache/audit-log/cooldown feature silently no-ops - category pages re-fetch from Jira on every load, follow-up cooldowns don't block repeat sends, and the per-user Jira token feature (step 5) refuses to work at all.
+1. In your Vercel project dashboard → Storage → Create Database → Upstash → Redis (this is the easiest path - it wires the env vars in for you automatically). Or create one directly at upstash.com and copy its REST URL/token by hand.
+2. That's it if you used the Vercel Marketplace route - it sets `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for you. If you created it manually, copy those two values from the Upstash console into `.env`/your Vercel env vars yourself.
+
+**3. Slack - two independent setups, only build what you need**
+
+*(a) Inbound - "Mentioned in Slack" ticket badges (`/api/slack/events`):*
+1. [api.slack.com/apps](https://api.slack.com/apps) → Create New App → From scratch → pick your workspace.
+2. Event Subscriptions → turn on → Request URL: `https://<your-deployment>/api/slack/events` (must already be deployed and reachable - Slack verifies this URL live before accepting it) → subscribe to the `message.channels` bot event.
+3. OAuth & Permissions → add bot scopes `channels:history` and `channels:read` → Install App to Workspace.
+4. Basic Information → Signing Secret → copy into `SLACK_SIGNING_SECRET`.
+5. Invite the bot to every channel you want watched (`/invite @YourAppName` in each channel) - Slack only sends events for channels the bot has actually joined.
+
+*(b) Outbound - the daily Agent Follow-Ups Slack summary (`app/api/cron/agent-followups`):*
+1. Same Slack app as above (or a new one) → OAuth & Permissions → add the bot scope `chat:write` → reinstall the app if you added this scope after the initial install.
+2. OAuth & Permissions → copy the "Bot User OAuth Token" (starts `xoxb-`) into `SLACK_BOT_TOKEN`.
+3. Invite the bot to the channel you want the daily summary posted to (`/invite @YourAppName`), then set `SLACK_AGENT_FOLLOWUP_CHANNEL` to that channel's name (e.g. `#follow-ups`) or ID.
+4. Leaving `SLACK_BOT_TOKEN` unset is safe - the cron still runs and prepares drafts, it just skips the Slack post (a warning is logged, nothing fails).
+
+**4. `CRON_SECRET` (required for the two scheduled jobs to run in production)**
+Any random string works - Vercel Cron attaches it as a header automatically once it's set as a project env var; without it, both `/api/cron/refresh` and `/api/cron/agent-followups` return 401 on every scheduled run. Generate one with `openssl rand -base64 24` or similar.
+
+**5. `TOKEN_ENCRYPTION_KEY` (only if you want per-team-member Jira tokens - see [Per-Team-Member Jira Tokens](#per-team-member-jira-tokens))**
+`openssl rand -base64 32`, paste the output in directly. Requires Redis (step 2) to actually persist anything. Skipping this just means `/settings/jira-tokens` refuses registrations with a clear error, and every follow-up keeps using the shared Jira account from step 1 - no partial/broken state either way.
+
+**6. `ANTHROPIC_API_KEY` (only if you want AI-drafted follow-ups instead of fixed templates)**
+Get one at [console.anthropic.com](https://console.anthropic.com). Also set `OPENROUTER_ESCALATION_ENABLED=true` - this one flag gates both AI drafting *and* escalation-risk triage. Skipping this means every draft uses the (still perfectly usable, just less tailored) hardcoded fallback templates - the app doesn't break.
+
+**7. `OPENROUTER_API_KEY` (only if you also want escalation-risk triage - immediate/watch/low scoring on category pages)**
+A separate, independent feature from step 6's drafting - see [AI Escalation Triage](#ai-escalation-triage) for why OpenRouter is the default over Mistral/NVIDIA here specifically.
+
 ## Environment
 
 Create a local `.env` file:
@@ -209,6 +248,7 @@ scripts/
   test-jira-comment-adf.ts      Jira comment ADF (mention) construction tests
   test-slack-signature.ts       Slack signature verification unit tests
   test-llm-client.ts            Anthropic/OpenAI-compatible request+response translation, draft/triage provider independence, pickVariant tests
+  test-user-jira-tokens.ts      Token encryption round-trip/tamper detection, per-user registration/lookup/list/remove tests
 ```
 
 ## AI Escalation Triage
@@ -268,7 +308,17 @@ Each issue's detail drawer has a "Draft follow-up" button (draft-then-confirm, n
 2. The draft appears in an editable text box. Nothing is sent until you click "Send."
 3. Sending calls `POST /api/tickets/[key]/followup/send`, which posts the (possibly edited) text as a real Jira comment via `addFollowUpComment()`, then records an audit entry and starts a cooldown (`FOLLOWUP_COOLDOWN_HOURS`, default 24h) that blocks another send on the same ticket, enforced server-side regardless of what the UI shows.
 
-**This app has no authentication.** Jira access uses one shared service-account token, so anyone who can reach a deployed URL could trigger a real Jira comment. Enable [Vercel Deployment Protection](https://vercel.com/docs/deployment-protection) (password or SSO) before deploying this feature anywhere reachable beyond your own machine.
+**This app still has no authentication.** Jira access defaults to one shared service-account token, so anyone who can reach a deployed URL could trigger a real Jira comment - see [Per-Team-Member Jira Tokens](#per-team-member-jira-tokens) for how a *ticket's own credentials* can now override that default, which is a routing improvement, not a login system. Enable [Vercel Deployment Protection](https://vercel.com/docs/deployment-protection) (password or SSO) before deploying this feature anywhere reachable beyond your own machine.
+
+## Per-Team-Member Jira Tokens
+
+`/settings/jira-tokens` lets each team member register their own Jira API token so a follow-up comment on *their* ticket posts under *their* Jira identity, rather than always the shared service account - useful for a natural Jira audit trail and so mentions/notifications behave the way they would if that person posted the comment themselves.
+
+**Routing is by ticket assignee, not by who's browsing.** This app has no login/session concept at all (see the note above) - there is no way to know who is physically at the keyboard. Instead: when a follow-up is sent to a ticket, the send route (`app/api/tickets/[key]/followup/send/route.ts`) looks up that ticket's `assignee_account_id`, checks whether that person has registered a personal token (`src/lib/userJiraTokens.ts`), and uses it if so - regardless of who clicked "Send." A ticket whose assignee hasn't registered one keeps using the shared service account, exactly as before this feature existed - fully backward compatible, nothing changes for anyone who doesn't opt in.
+
+**Registration** (`registerUserJiraToken()`) never trusts a pasted token blindly: it calls Jira's own `/myself` with the *exact* email+token pair being registered, and only stores it if Jira accepts it - the stored account id, display name, and email all come back from Jira itself, not from the form. **Tokens are encrypted at rest** (`src/lib/tokenCrypto.ts`, AES-256-GCM, keyed by `TOKEN_ENCRYPTION_KEY` - generate with `openssl rand -base64 32`) before being written to Redis; the plaintext token is never stored and is not shown again after registration. If a stored token later turns out to be expired or revoked (a 401/403 from Jira when actually posting), the send route logs a warning, falls back to the shared service account for that one request, and reports `usedFallbackAccount: true` in its response rather than failing the send outright.
+
+**To create a token**: log in to [id.atlassian.com/manage-profile/security/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens) → "Create API token with scopes" → name it, set an expiration (1-365 days), select Jira, grant scopes covering reading/writing issues and comments plus reading your own profile → Create → copy it → paste it into `/settings/jira-tokens`. A token that expires simply stops working at that date; re-registering with a fresh token is the only way to renew it - there's no expiry-tracking or renewal-reminder mechanism yet.
 
 ## Follow-Up Draft Generation
 

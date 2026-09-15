@@ -17,6 +17,7 @@
     "test:llm-client": "npx tsx scripts/test-llm-client.ts",
     "test:slack": "npx tsx scripts/test-slack-signature.ts",
     "test:theme": "npx tsx scripts/test-theme.ts",
+    "test:user-jira-tokens": "npx tsx scripts/test-user-jira-tokens.ts",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {

@@ -4,9 +4,11 @@ import { NextResponse } from "next/server";
 
 import type { FollowUpAuditEntry, FollowUpKind } from "@/lib/followupAudit";
 import { followUpAuditLogKey, followUpCooldownKey } from "@/lib/followupAudit";
-import { addFollowUpComment, getIssueByKey, transitionIssueToDone } from "@/lib/jiraClient";
+import { addFollowUpComment, getIssueByKey, JiraRequestError, transitionIssueToDone } from "@/lib/jiraClient";
+import type { JiraCredentials } from "@/lib/jiraClient";
 import { checkExternalMessageSafety } from "@/lib/messageSafety";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
+import { getJiraCredentialsForAccount } from "@/lib/userJiraTokens";
 
 interface SendFollowUpRequestBody {
   kind?: unknown;
@@ -36,6 +38,30 @@ function parseCooldownHours(value: string | undefined): number {
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 24;
+}
+
+/* A mentionAccountId sourced from an old comment (see
+   getLatestCommentMentions in jiraClient.ts) can reference a deactivated/
+   removed account, which Jira rejects - without this retry, one stale
+   accountId would silently kill the whole comment post rather than just
+   posting without a mention. */
+async function postCommentRetryingWithoutMention(
+  key: string,
+  text: string,
+  mentionAccountId: string | undefined,
+  credentials: JiraCredentials | undefined,
+): Promise<{ comment: Awaited<ReturnType<typeof addFollowUpComment>>; mentionFailed: boolean }> {
+  try {
+    const comment = await addFollowUpComment(key, text, mentionAccountId, credentials);
+    return { comment, mentionFailed: false };
+  } catch (error) {
+    if (!mentionAccountId) {
+      throw error;
+    }
+    console.warn(`Comment post with mention failed for ${key}; retrying without the mention.`, error);
+    const comment = await addFollowUpComment(key, text, undefined, credentials);
+    return { comment, mentionFailed: true };
+  }
 }
 
 export async function POST(
@@ -115,25 +141,37 @@ export async function POST(
     }
   }
 
+  // Post under the ticket's assignee's own Jira identity if they've
+  // registered a personal token (see src/lib/userJiraTokens.ts) - falls back
+  // to the shared service account exactly as before if they haven't, or if
+  // their stored token turns out to be expired/revoked (401/403). Whichever
+  // credentials actually succeed also close the ticket below, so the same
+  // identity that posted the comment is the one that transitions it.
+  const personalCredentials = await getJiraCredentialsForAccount(issue.assignee_account_id);
+  let effectiveCredentials = personalCredentials ?? undefined;
+  let usedFallbackAccount = false;
+
   try {
     let comment: Awaited<ReturnType<typeof addFollowUpComment>>;
     let mentionFailed = false;
 
     try {
-      comment = await addFollowUpComment(key, text, mentionAccountId);
+      ({ comment, mentionFailed } = await postCommentRetryingWithoutMention(
+        key,
+        text,
+        mentionAccountId,
+        effectiveCredentials,
+      ));
     } catch (error) {
-      // A mentionAccountId sourced from an old comment (see
-      // getLatestCommentMentions in jiraClient.ts) can reference a
-      // deactivated/removed account, which Jira rejects - without this
-      // retry, one stale accountId would silently kill the whole comment
-      // post (and, for a scheduled feature nobody's actively watching, the
-      // escalation along with it) rather than just posting without a mention.
-      if (!mentionAccountId) {
+      if (!personalCredentials || !(error instanceof JiraRequestError) || (error.status !== 401 && error.status !== 403)) {
         throw error;
       }
-      console.warn(`Comment post with mention failed for ${key}; retrying without the mention.`, error);
-      comment = await addFollowUpComment(key, text);
-      mentionFailed = true;
+      console.warn(
+        `${issue.assignee}'s personal Jira token was rejected (status ${error.status}) for ${key}; falling back to the shared service account.`,
+      );
+      usedFallbackAccount = true;
+      effectiveCredentials = undefined;
+      ({ comment, mentionFailed } = await postCommentRetryingWithoutMention(key, text, mentionAccountId, undefined));
     }
 
     const postedAt = new Date().toISOString();
@@ -171,7 +209,7 @@ export async function POST(
     // human still needs to know either way, and an unresolved case like this
     // resurfaces for a retry (see CLOSE_ATTEMPT_KINDS in slaFollowup.ts).
     if (CLOSING_KINDS.includes(kind)) {
-      const transitionResult = await transitionIssueToDone(key);
+      const transitionResult = await transitionIssueToDone(key, effectiveCredentials);
 
       return NextResponse.json({
         commentId: comment.id,
@@ -179,10 +217,11 @@ export async function POST(
         postedAt,
         transitionedToDone: transitionResult.transitioned,
         transitionError: transitionResult.transitioned ? undefined : transitionResult.reason,
+        usedFallbackAccount,
       });
     }
 
-    return NextResponse.json({ commentId: comment.id, mentionFailed, postedAt });
+    return NextResponse.json({ commentId: comment.id, mentionFailed, postedAt, usedFallbackAccount });
   } catch (error) {
     console.error(`Failed to post follow-up comment for ${key}:`, error);
     return NextResponse.json(

@@ -34,8 +34,14 @@ export default async function AgentFollowUpsPage(): Promise<React.ReactElement> 
       ])
     : [[], []];
 
+  // CP tickets are Product-side bugs a TS engineer files against a client-facing TS
+  // ticket - the assignee/mentionTarget (whoever gets nudged) is almost always a
+  // Product team member, never the TS person browsing this tab. "Mine" here means
+  // "the CP ticket I personally reported," matching CP.reporter_account_id - not
+  // mentionTarget.accountId, which would only ever match by coincidence (e.g. the
+  // "unconfirmed_reporter_guess" fallback when a CP has no assignee or mention yet).
   const cpCandidates = identity
-    ? allCpCandidates.filter((candidate) => candidate.mentionTarget.accountId === identity.accountId)
+    ? allCpCandidates.filter((candidate) => candidate.cp.reporter_account_id === identity.accountId)
     : [];
   const tsCandidates = identity
     ? allTsCandidates.filter((candidate) => candidate.issue.assignee_account_id === identity.accountId)

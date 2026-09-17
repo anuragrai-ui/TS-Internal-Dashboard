@@ -1,6 +1,8 @@
 import Link from "next/link";
 
+import { assigneeMatchesIdentity, getCurrentIdentity } from "@/lib/currentIdentity";
 import { Icon } from "@/components/Icon";
+import { IdentityRequired } from "@/components/IdentityRequired";
 import { KpiStrip } from "@/components/KpiStrip";
 import { getSheetBacklog } from "@/lib/googleSheetBacklog";
 
@@ -29,10 +31,13 @@ function formatDate(value: string): string {
 }
 
 export default async function HistoryPage(): Promise<React.ReactElement> {
-  const data = await getSheetBacklog();
-  const rows = [...data.followups].sort((a, b) =>
-    b.generatedAt.localeCompare(a.generatedAt),
-  );
+  const identity = await getCurrentIdentity();
+  const data = identity ? await getSheetBacklog() : null;
+  const rows = data && identity
+    ? [...data.followups]
+        .filter((followup) => assigneeMatchesIdentity(followup.assignee, identity))
+        .sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))
+    : [];
   const tsCount = rows.filter((row) =>
     row.ticketType.toUpperCase().startsWith("TS"),
   ).length;
@@ -41,7 +46,7 @@ export default async function HistoryPage(): Promise<React.ReactElement> {
   ).length;
   const latestGeneratedAt = rows.find((row) => row.generatedAt)?.generatedAt ?? "";
   const kpis: KpiItem[] = [
-    { label: "Source Tickets", value: data.tickets.length },
+    { label: "Source Tickets", value: data?.tickets.length ?? 0 },
     { label: "History Entries", value: rows.length },
     { label: "TS Analyses", value: tsCount },
     { label: "CP Analyses", value: cpCount },
@@ -60,35 +65,42 @@ export default async function HistoryPage(): Promise<React.ReactElement> {
           <p className="page-subtitle">
             Generated TS and CP analysis records from the AI Follow-ups sheet.
           </p>
-          <div className="sync-meta">
-            <span>Latest generated: {formatDate(latestGeneratedAt)}</span>
-            <span aria-hidden="true">•</span>
-            <span>Source loaded: {formatDate(data.fetchedAt)}</span>
-          </div>
+          {data ? (
+            <div className="sync-meta">
+              <span>Latest generated: {formatDate(latestGeneratedAt)}</span>
+              <span aria-hidden="true">•</span>
+              <span>Source loaded: {formatDate(data.fetchedAt)}</span>
+            </div>
+          ) : null}
         </div>
         <div className="page-actions">
           <Link className="btn" href="/sheet-followups">
             <Icon name="bot" size={14} />
             AI follow-ups
           </Link>
-          <a
-            className="btn"
-            href={`${data.sourceUrl}#gid=957104001`}
-            rel="noreferrer"
-            target="_blank"
-          >
-            <Icon name="external-link" size={14} />
-            Open history sheet
-          </a>
+          {data ? (
+            <a
+              className="btn"
+              href={`${data.sourceUrl}#gid=957104001`}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <Icon name="external-link" size={14} />
+              Open history sheet
+            </a>
+          ) : null}
         </div>
       </div>
 
       <KpiStrip items={kpis} />
 
-      {rows.length === 0 ? (
+      {!identity ? (
+        <IdentityRequired itemsLabel="history" />
+      ) : rows.length === 0 ? (
         <div className="empty-state">
-          The source backlog loaded successfully with {data.tickets.length} tickets. Generated
-          history will appear here after the next scheduled GPT-5.5 analysis run.
+          The source backlog loaded successfully with {data?.tickets.length ?? 0} tickets. No generated
+          history is assigned to you yet - it will appear here after the next scheduled GPT-5.5 analysis
+          run.
         </div>
       ) : (
         <div className="table-scroll">

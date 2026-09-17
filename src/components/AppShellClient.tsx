@@ -10,7 +10,7 @@ const STORAGE_KEY = "ts-dashboard-sidebar-collapsed";
 interface AppShellClientProps {
   children: React.ReactNode;
   jiraBaseUrl: string;
-  userDisplayName: string;
+  userDisplayName: string | null;
 }
 
 export function AppShellClient({

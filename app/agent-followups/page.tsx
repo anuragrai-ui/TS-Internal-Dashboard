@@ -3,8 +3,10 @@ import Link from "next/link";
 import { getCachedCpCandidates, getCachedTsCandidates } from "@/lib/agentFollowupCache";
 import { CpEscalationAction } from "@/components/CpEscalationAction";
 import { getCpEscalationCandidates } from "@/lib/cpEscalation";
+import { getCurrentIdentity } from "@/lib/currentIdentity";
 import { getProductWaitCandidates } from "@/lib/productWaitFollowup";
 import { Icon } from "@/components/Icon";
+import { IdentityRequired } from "@/components/IdentityRequired";
 import { KpiStrip } from "@/components/KpiStrip";
 import { ProductWaitFollowUpAction } from "@/components/ProductWaitFollowUpAction";
 
@@ -23,10 +25,21 @@ function mentionSourceLabel(source: string): string {
 }
 
 export default async function AgentFollowUpsPage(): Promise<React.ReactElement> {
-  const [cpCandidates, tsCandidates] = await Promise.all([
-    getCachedCpCandidates().then((cached) => cached ?? getCpEscalationCandidates()),
-    getCachedTsCandidates().then((cached) => cached ?? getProductWaitCandidates()),
-  ]);
+  const identity = await getCurrentIdentity();
+
+  const [allCpCandidates, allTsCandidates] = identity
+    ? await Promise.all([
+        getCachedCpCandidates().then((cached) => cached ?? getCpEscalationCandidates()),
+        getCachedTsCandidates().then((cached) => cached ?? getProductWaitCandidates()),
+      ])
+    : [[], []];
+
+  const cpCandidates = identity
+    ? allCpCandidates.filter((candidate) => candidate.mentionTarget.accountId === identity.accountId)
+    : [];
+  const tsCandidates = identity
+    ? allTsCandidates.filter((candidate) => candidate.issue.assignee_account_id === identity.accountId)
+    : [];
 
   const highPriorityCount = cpCandidates.filter(
     (candidate) => candidate.cp.priority === "Critical" || candidate.cp.priority === "High",
@@ -79,8 +92,10 @@ export default async function AgentFollowUpsPage(): Promise<React.ReactElement> 
 
       <KpiStrip items={cpKpis} />
 
-      {cpCandidates.length === 0 ? (
-        <div className="empty-state">No CP escalations are currently due.</div>
+      {!identity ? (
+        <IdentityRequired itemsLabel="CP escalations" />
+      ) : cpCandidates.length === 0 ? (
+        <div className="empty-state">No CP escalations are currently due for you.</div>
       ) : (
         <div className="table-scroll">
           <table className="data-table">
@@ -164,8 +179,10 @@ export default async function AgentFollowUpsPage(): Promise<React.ReactElement> 
 
       <KpiStrip items={tsKpis} />
 
-      {tsCandidates.length === 0 ? (
-        <div className="empty-state">No TS product-wait follow-ups are currently due.</div>
+      {!identity ? (
+        <IdentityRequired itemsLabel="TS product-wait follow-ups" />
+      ) : tsCandidates.length === 0 ? (
+        <div className="empty-state">No TS product-wait follow-ups are currently due for you.</div>
       ) : (
         <div className="table-scroll">
           <table className="data-table">

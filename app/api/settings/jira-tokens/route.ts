@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 
+import { IDENTITY_COOKIE } from "@/lib/currentIdentity";
 import { listRegisteredJiraUsers, registerUserJiraToken } from "@/lib/userJiraTokens";
+
+/* One year: this cookie just remembers which registered account a browser
+   belongs to, not a security-sensitive session - re-registering or using the
+   "identify as" switcher (see app/api/settings/identity/route.ts) overwrites
+   it at any time. */
+const IDENTITY_COOKIE_MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
 
 interface RegisterRequestBody {
   apiToken?: unknown;
@@ -34,5 +41,16 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: result.error }, { status: 422 });
   }
 
-  return NextResponse.json({ user: result.user });
+  const response = NextResponse.json({ user: result.user });
+  // Registering just proved control of this Jira account (verified against
+  // Jira's own /myself in registerUserJiraToken) - identify this browser as
+  // that person from now on, same as a fresh sign-in.
+  response.cookies.set(IDENTITY_COOKIE, result.user.accountId, {
+    httpOnly: true,
+    maxAge: IDENTITY_COOKIE_MAX_AGE_SECONDS,
+    path: "/",
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+  return response;
 }

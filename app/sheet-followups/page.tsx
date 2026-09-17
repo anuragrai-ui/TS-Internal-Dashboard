@@ -1,6 +1,8 @@
 import Link from "next/link";
 
+import { assigneeMatchesIdentity, getCurrentIdentity } from "@/lib/currentIdentity";
 import { Icon } from "@/components/Icon";
+import { IdentityRequired } from "@/components/IdentityRequired";
 import { IssueWorkspace } from "@/components/IssueWorkspace";
 import { KpiStrip } from "@/components/KpiStrip";
 import { getSheetBacklog } from "@/lib/googleSheetBacklog";
@@ -72,8 +74,12 @@ function asAnalysis(followup: SheetFollowup): TicketEscalationAnalysis | undefin
 }
 
 export default async function SheetFollowupsPage(): Promise<React.ReactElement> {
-  const data = await getSheetBacklog();
-  const rows = data.followups.map((followup) =>
+  const identity = await getCurrentIdentity();
+  const data = identity ? await getSheetBacklog() : null;
+  const followups = data && identity
+    ? data.followups.filter((followup) => assigneeMatchesIdentity(followup.assignee, identity))
+    : [];
+  const rows = followups.map((followup) =>
     toIssueRow(asIssue(followup), {
       analysis: asAnalysis(followup),
       scheduledFollowup: {
@@ -83,15 +89,15 @@ export default async function SheetFollowupsPage(): Promise<React.ReactElement> 
       },
     }),
   );
-  const tsCount = data.followups.filter((item) =>
+  const tsCount = followups.filter((item) =>
     item.ticketType.toUpperCase().startsWith("TS"),
   ).length;
-  const cpCount = data.followups.filter((item) =>
+  const cpCount = followups.filter((item) =>
     item.ticketType.toUpperCase().startsWith("CP"),
   ).length;
-  const readyCount = data.followups.filter((item) => item.followupDraft).length;
+  const readyCount = followups.filter((item) => item.followupDraft).length;
   const kpis: KpiItem[] = [
-    { label: "Total Insights", value: data.followups.length },
+    { label: "Total Insights", value: followups.length },
     { label: "TS Tickets", value: tsCount },
     { label: "CP Tickets", value: cpCount },
     { label: "Drafts Ready", value: readyCount },
@@ -116,22 +122,26 @@ export default async function SheetFollowupsPage(): Promise<React.ReactElement> 
             <span>Generated every 4 hours</span>
           </div>
         </div>
-        <div className="page-actions">
-          <a className="btn" href={`${data.sourceUrl}#gid=957104001`} rel="noreferrer" target="_blank">
-            <Icon name="external-link" size={14} />
-            Open AI sheet
-          </a>
-        </div>
+        {data ? (
+          <div className="page-actions">
+            <a className="btn" href={`${data.sourceUrl}#gid=957104001`} rel="noreferrer" target="_blank">
+              <Icon name="external-link" size={14} />
+              Open AI sheet
+            </a>
+          </div>
+        ) : null}
       </div>
 
       <KpiStrip items={kpis} />
 
-      {rows.length > 0 ? (
+      {!identity ? (
+        <IdentityRequired itemsLabel="AI follow-up insights" />
+      ) : rows.length > 0 ? (
         <IssueWorkspace rows={rows} showAssigneeTabs />
       ) : (
         <div className="empty-state">
-          The AI Follow-ups sheet is ready. Insights and drafts will appear after the next
-          scheduled four-hour analysis run.
+          No AI Follow-ups insights are currently assigned to you. New insights and drafts appear after
+          the next scheduled four-hour analysis run.
         </div>
       )}
     </>

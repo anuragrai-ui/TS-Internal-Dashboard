@@ -45,7 +45,7 @@ const TICKET_KEY_PATTERN = /^(TS|CP)-\d+$/i;
 interface TopHeaderProps {
   jiraBaseUrl: string;
   onMenuClick: () => void;
-  userDisplayName: string;
+  userDisplayName: string | null;
 }
 
 export function TopHeader({ jiraBaseUrl, onMenuClick, userDisplayName }: TopHeaderProps): React.ReactElement {
@@ -53,12 +53,14 @@ export function TopHeader({ jiraBaseUrl, onMenuClick, userDisplayName }: TopHead
   const [query, setQuery] = useState("");
 
   const initials = userDisplayName
-    .split(" ")
-    .map((part) => part[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+    ? userDisplayName
+        .split(" ")
+        .map((part) => part[0])
+        .filter(Boolean)
+        .slice(0, 2)
+        .join("")
+        .toUpperCase()
+    : "";
 
   const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
     if (event.key !== "Enter") {
@@ -114,9 +116,20 @@ export function TopHeader({ jiraBaseUrl, onMenuClick, userDisplayName }: TopHead
           <Icon name="refresh" />
         </Link>
         <ThemeToggle />
-        <span aria-label={userDisplayName} className="user-badge" title={userDisplayName}>
-          {initials || "?"}
-        </span>
+        {userDisplayName ? (
+          <span aria-label={userDisplayName} className="user-badge" title={userDisplayName}>
+            {initials || "?"}
+          </span>
+        ) : (
+          <Link
+            aria-label="Not identified - enter your Jira API key"
+            className="user-badge user-badge-unidentified"
+            href="/settings/jira-tokens"
+            title="Not identified - enter your Jira API key"
+          >
+            <Icon name="user" size={14} />
+          </Link>
+        )}
       </div>
     </header>
   );

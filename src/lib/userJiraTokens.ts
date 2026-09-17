@@ -7,13 +7,12 @@ import { decryptSecret, encryptSecret, isTokenEncryptionConfigured } from "@/lib
  * Lets each team member register their own Jira API token so a follow-up
  * comment on their ticket posts under their own Jira identity instead of the
  * shared service account - see the "Per-Team-Member Jira Tokens" README
- * section. Routing is by ticket ASSIGNEE, not by "who is browsing" (this app
- * has no login/session concept at all - see AppShell.tsx's getCurrentUser()
- * call, which always resolves to the shared service account): whoever a
- * ticket is assigned to is whoever's token (if registered) posts the
- * follow-up, regardless of who clicked Send. This matches the actual
- * request - "so everyone can take action on their own tickets" - without
- * needing to build real authentication for a small internal team.
+ * section. Registering also identifies this browser as that person (see
+ * src/lib/currentIdentity.ts) - a lightweight, no-real-auth "who is
+ * browsing" concept built entirely on top of this same registry. The send
+ * route (app/api/tickets/[key]/followup/send/route.ts) prefers the browsing
+ * identity's token when present, falling back to the ticket's own assignee
+ * for any caller with no identity cookie (e.g. the cron job).
  */
 export interface RegisteredJiraUser {
   accountId: string;
@@ -135,6 +134,28 @@ export async function getJiraCredentialsForAccount(
     return { apiToken: decryptSecret(record.encryptedApiToken), email: record.email };
   } catch (error) {
     console.warn(`Failed to read/decrypt the registered Jira token for account ${accountId}.`, error);
+    return null;
+  }
+}
+
+/** Single-account lookup backing src/lib/currentIdentity.ts - a browser's identity cookie only stores an accountId, so resolving "who is this" needs one record, not the whole list. */
+export async function getRegisteredJiraUser(
+  accountId: string | undefined,
+  store?: UserTokenStore,
+): Promise<RegisteredJiraUser | null> {
+  if (!accountId || !isRedisConfigured()) {
+    return null;
+  }
+
+  try {
+    const record = await (store ?? resolveStore()).get<StoredUserToken>(tokenKey(accountId));
+    if (!record) {
+      return null;
+    }
+    const { accountId: id, displayName, email, registeredAt } = record;
+    return { accountId: id, displayName, email, registeredAt };
+  } catch (error) {
+    console.warn(`Failed to look up the registered Jira user for account ${accountId}.`, error);
     return null;
   }
 }

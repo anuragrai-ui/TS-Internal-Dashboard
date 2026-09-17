@@ -7,7 +7,7 @@
     "build": "next build",
     "dev": "next dev -H 127.0.0.1 -p 8000",
     "lint": "eslint .",
-    "redis:backup-and-clean": "npx tsx scripts/backup-and-clean-redis.ts",
+    "redis:backup-and-clean": "npx tsx --env-file=.env scripts/backup-and-clean-redis.ts",
     "start": "next start -H 127.0.0.1 -p 8000",
     "test:agent-followups": "npx tsx scripts/test-agent-followups.ts",
     "test:agent-tools": "npx tsx scripts/test-agent-tools.ts",

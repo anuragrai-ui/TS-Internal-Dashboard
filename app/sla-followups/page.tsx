@@ -1,6 +1,8 @@
 import Link from "next/link";
 
+import { getCurrentIdentity } from "@/lib/currentIdentity";
 import { Icon } from "@/components/Icon";
+import { IdentityRequired } from "@/components/IdentityRequired";
 import { KpiStrip } from "@/components/KpiStrip";
 import { SlaFollowUpAction } from "@/components/SlaFollowUpAction";
 import { getSlaFollowUpCandidates } from "@/lib/slaFollowup";
@@ -14,7 +16,11 @@ function reasonLabel(reason: "cp_not_worked" | "no_reporter_response"): string {
 }
 
 export default async function SlaFollowUpsPage(): Promise<React.ReactElement> {
-  const candidates = await getSlaFollowUpCandidates();
+  const identity = await getCurrentIdentity();
+  const allCandidates = identity ? await getSlaFollowUpCandidates() : [];
+  const candidates = identity
+    ? allCandidates.filter((candidate) => candidate.issue.assignee_account_id === identity.accountId)
+    : [];
   const stage1Count = candidates.filter((candidate) => candidate.stage === 1).length;
   const stage2Count = candidates.filter((candidate) => candidate.stage === 2).length;
   const stage3Count = candidates.filter((candidate) => candidate.stage === 3).length;
@@ -47,8 +53,10 @@ export default async function SlaFollowUpsPage(): Promise<React.ReactElement> {
 
       <KpiStrip items={kpis} />
 
-      {candidates.length === 0 ? (
-        <div className="empty-state">No tickets currently need an SLA follow-up.</div>
+      {!identity ? (
+        <IdentityRequired itemsLabel="SLA follow-ups" />
+      ) : candidates.length === 0 ? (
+        <div className="empty-state">No tickets assigned to you currently need an SLA follow-up.</div>
       ) : (
         <div className="table-scroll">
           <table className="data-table">

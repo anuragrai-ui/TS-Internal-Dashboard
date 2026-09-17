@@ -674,6 +674,17 @@ textarea:focus-visible,
   flex-shrink: 0;
 }
 
+.user-badge-unidentified {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  border: 1px dashed var(--border-strong);
+}
+
+.user-badge-unidentified:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 /* =================================================================
    Page header row
    ================================================================= */

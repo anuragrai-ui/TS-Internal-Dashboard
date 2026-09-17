@@ -2,7 +2,9 @@ import Link from "next/link";
 
 import { ClosureCandidateAction } from "@/components/ClosureCandidateAction";
 import { getClosureCandidates } from "@/lib/closureCandidates";
+import { getCurrentIdentity } from "@/lib/currentIdentity";
 import { Icon } from "@/components/Icon";
+import { IdentityRequired } from "@/components/IdentityRequired";
 import { KpiStrip } from "@/components/KpiStrip";
 
 import type { ClosureReason } from "@/lib/closureCandidates";
@@ -21,7 +23,11 @@ function reasonLabel(reason: ClosureReason): string {
 }
 
 export default async function ClosureCandidatesPage(): Promise<React.ReactElement> {
-  const candidates = await getClosureCandidates();
+  const identity = await getCurrentIdentity();
+  const allCandidates = identity ? await getClosureCandidates() : [];
+  const candidates = identity
+    ? allCandidates.filter((candidate) => candidate.issue.assignee_account_id === identity.accountId)
+    : [];
   const linkedCpCount = candidates.filter((candidate) => candidate.reason === "linked_cp_resolved").length;
   const similarCount = candidates.filter((candidate) => candidate.reason === "similar_issue_resolved").length;
   const retryCount = candidates.filter((candidate) => candidate.reason === "retry_close").length;
@@ -53,8 +59,10 @@ export default async function ClosureCandidatesPage(): Promise<React.ReactElemen
 
       <KpiStrip items={kpis} />
 
-      {candidates.length === 0 ? (
-        <div className="empty-state">No open TS tickets currently look resolved elsewhere.</div>
+      {!identity ? (
+        <IdentityRequired itemsLabel="closure candidates" />
+      ) : candidates.length === 0 ? (
+        <div className="empty-state">No open TS tickets assigned to you currently look resolved elsewhere.</div>
       ) : (
         <div className="table-scroll">
           <table className="data-table">

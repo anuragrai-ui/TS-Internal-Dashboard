@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { getCurrentIdentity } from "@/lib/currentIdentity";
 import { Icon } from "@/components/Icon";
 import { JiraTokenSettings } from "@/components/JiraTokenSettings";
 import { listRegisteredJiraUsers } from "@/lib/userJiraTokens";
@@ -7,7 +8,7 @@ import { listRegisteredJiraUsers } from "@/lib/userJiraTokens";
 export const dynamic = "force-dynamic";
 
 export default async function JiraTokenSettingsPage(): Promise<React.ReactElement> {
-  const users = await listRegisteredJiraUsers();
+  const [users, currentIdentity] = await Promise.all([listRegisteredJiraUsers(), getCurrentIdentity()]);
 
   return (
     <>
@@ -20,11 +21,12 @@ export default async function JiraTokenSettingsPage(): Promise<React.ReactElemen
         <div className="page-title-group">
           <h1 className="page-title">Jira Tokens</h1>
           <p className="page-subtitle">
-            Register your own Jira API token so follow-ups on tickets assigned to you post under your own
-            Jira identity instead of the shared account. Routing is by ticket assignee, not by who clicks
-            Send - once registered, any follow-up sent to one of your tickets from anywhere in this
-            dashboard uses your token automatically. Tickets belonging to anyone who hasn't registered
-            still use the shared account, exactly as before.
+            Registering your own Jira API token identifies this browser as you: the Agent Follow-Ups,
+            Sheet AI Follow-Ups, SLA Follow-Ups, Closure Candidates, and History tabs then show only
+            tickets assigned to you, and anything you send from them posts under your own Jira account
+            instead of the shared one. Nobody sees another person's tickets on those tabs. If you've
+            already registered, use "Identify as" below to switch which of you a shared browser is
+            currently identified as.
           </p>
           <p className="page-subtitle">
             To create a token: log in to{" "}
@@ -47,7 +49,7 @@ export default async function JiraTokenSettingsPage(): Promise<React.ReactElemen
         </div>
       </div>
 
-      <JiraTokenSettings users={users} />
+      <JiraTokenSettings currentIdentity={currentIdentity} users={users} />
     </>
   );
 }

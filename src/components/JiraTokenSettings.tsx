@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { RegisteredJiraUser } from "@/lib/userJiraTokens";
 
 interface JiraTokenSettingsProps {
+  currentIdentity: RegisteredJiraUser | null;
   users: RegisteredJiraUser[];
 }
 
@@ -14,7 +15,12 @@ interface RegisterResponseBody {
   user?: RegisteredJiraUser;
 }
 
-export function JiraTokenSettings({ users }: JiraTokenSettingsProps): React.ReactElement {
+interface IdentityResponseBody {
+  error?: string;
+  user?: RegisteredJiraUser;
+}
+
+export function JiraTokenSettings({ currentIdentity, users }: JiraTokenSettingsProps): React.ReactElement {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [apiToken, setApiToken] = useState("");
@@ -22,6 +28,8 @@ export function JiraTokenSettings({ users }: JiraTokenSettingsProps): React.Reac
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
+  const [switchError, setSwitchError] = useState("");
 
   const handleSubmit = async (event: React.FormEvent): Promise<void> => {
     event.preventDefault();
@@ -64,8 +72,68 @@ export function JiraTokenSettings({ users }: JiraTokenSettingsProps): React.Reac
     }
   };
 
+  const handleIdentifyAs = async (accountId: string): Promise<void> => {
+    setSwitchingId(accountId);
+    setSwitchError("");
+
+    try {
+      const response = await fetch("/api/settings/identity", {
+        body: JSON.stringify({ accountId }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const body = (await response.json()) as IdentityResponseBody;
+
+      if (!response.ok || !body.user) {
+        setSwitchError(body.error ?? "Failed to switch identity.");
+        return;
+      }
+
+      router.refresh();
+    } catch {
+      setSwitchError("Failed to switch identity.");
+    } finally {
+      setSwitchingId(null);
+    }
+  };
+
+  const handleForgetIdentity = async (): Promise<void> => {
+    setSwitchingId("__clear__");
+
+    try {
+      await fetch("/api/settings/identity", { method: "DELETE" });
+      router.refresh();
+    } finally {
+      setSwitchingId(null);
+    }
+  };
+
   return (
     <>
+      {currentIdentity ? (
+        <div className="followup-panel">
+          <span className="page-subtitle">
+            This browser is identified as <strong>{currentIdentity.displayName}</strong>. The Operations
+            tabs show only their tickets, and Send posts under their Jira account.
+          </span>
+          <div className="followup-panel-actions">
+            <button
+              className="followup-button"
+              disabled={switchingId === "__clear__"}
+              onClick={() => void handleForgetIdentity()}
+              type="button"
+            >
+              {switchingId === "__clear__" ? "Clearing…" : "Not you? Forget this identity"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="empty-state">
+          This browser isn't identified as anyone yet - register your token below, or pick yourself from
+          the list if you've already registered.
+        </div>
+      )}
+
       <form className="followup-panel" onSubmit={(event) => void handleSubmit(event)}>
         <label className="page-subtitle" htmlFor="jira-token-email">
           Jira account email
@@ -104,6 +172,8 @@ export function JiraTokenSettings({ users }: JiraTokenSettingsProps): React.Reac
         {successMessage ? <span className="followup-status followup-status-success">{successMessage}</span> : null}
       </form>
 
+      {switchError ? <span className="followup-status followup-status-error">{switchError}</span> : null}
+
       {users.length === 0 ? (
         <div className="empty-state">No team members have registered a personal Jira token yet.</div>
       ) : (
@@ -119,23 +189,39 @@ export function JiraTokenSettings({ users }: JiraTokenSettingsProps): React.Reac
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
-                <tr key={user.accountId}>
-                  <td>{user.displayName}</td>
-                  <td className="cell-muted">{user.email}</td>
-                  <td className="cell-muted">{new Date(user.registeredAt).toLocaleDateString()}</td>
-                  <td>
-                    <button
-                      className="followup-button"
-                      disabled={removingId === user.accountId}
-                      onClick={() => void handleRemove(user.accountId)}
-                      type="button"
-                    >
-                      {removingId === user.accountId ? "Removing…" : "Remove"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {users.map((user) => {
+                const isCurrent = currentIdentity?.accountId === user.accountId;
+                return (
+                  <tr key={user.accountId}>
+                    <td>
+                      {user.displayName}
+                      {isCurrent ? <span className="cell-sub"> (you)</span> : null}
+                    </td>
+                    <td className="cell-muted">{user.email}</td>
+                    <td className="cell-muted">{new Date(user.registeredAt).toLocaleDateString()}</td>
+                    <td style={{ display: "flex", gap: "var(--space-2)" }}>
+                      {!isCurrent ? (
+                        <button
+                          className="followup-button"
+                          disabled={switchingId === user.accountId}
+                          onClick={() => void handleIdentifyAs(user.accountId)}
+                          type="button"
+                        >
+                          {switchingId === user.accountId ? "Switching…" : "Identify as"}
+                        </button>
+                      ) : null}
+                      <button
+                        className="followup-button"
+                        disabled={removingId === user.accountId}
+                        onClick={() => void handleRemove(user.accountId)}
+                        type="button"
+                      >
+                        {removingId === user.accountId ? "Removing…" : "Remove"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

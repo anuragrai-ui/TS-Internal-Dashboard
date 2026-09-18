@@ -233,6 +233,7 @@ async function testCpCadenceHighPriority(): Promise<void> {
   const tooSoon = await determineCpCandidate(
     makeIssue({ priority: "High", updated: daysAgoIso(1) }),
     "TS-1",
+    undefined,
     mockAuditEntries([]),
     resolveMentionTargetOk,
   );
@@ -241,6 +242,7 @@ async function testCpCadenceHighPriority(): Promise<void> {
   const due = await determineCpCandidate(
     makeIssue({ priority: "Critical", updated: daysAgoIso(3) }),
     "TS-1",
+    undefined,
     mockAuditEntries([]),
     resolveMentionTargetOk,
   );
@@ -255,6 +257,7 @@ async function testCpCadenceMediumPriority(): Promise<void> {
   const tooSoon = await determineCpCandidate(
     makeIssue({ priority: "Medium" }),
     "TS-1",
+    undefined,
     mockAuditEntries([makeAuditEntry({ posted_at: daysAgoIso(5) })]),
     resolveMentionTargetOk,
   );
@@ -263,6 +266,7 @@ async function testCpCadenceMediumPriority(): Promise<void> {
   const due = await determineCpCandidate(
     makeIssue({ priority: "Medium" }),
     "TS-1",
+    undefined,
     mockAuditEntries([makeAuditEntry({ posted_at: daysAgoIso(8) })]),
     resolveMentionTargetOk,
   );
@@ -277,6 +281,7 @@ async function testCpLowPriorityAndDoneExcluded(): Promise<void> {
   const low = await determineCpCandidate(
     makeIssue({ priority: "Low", updated: daysAgoIso(30) }),
     "TS-1",
+    undefined,
     mockAuditEntries([]),
     resolveMentionTargetOk,
   );
@@ -285,6 +290,7 @@ async function testCpLowPriorityAndDoneExcluded(): Promise<void> {
   const done = await determineCpCandidate(
     makeIssue({ priority: "Critical", status_category: "done", updated: daysAgoIso(30) }),
     "TS-1",
+    undefined,
     mockAuditEntries([]),
     resolveMentionTargetOk,
   );
@@ -299,12 +305,34 @@ async function testCpNoMentionTargetExcludesCandidate(): Promise<void> {
   const result = await determineCpCandidate(
     makeIssue({ priority: "High", updated: daysAgoIso(5) }),
     "TS-1",
+    undefined,
     mockAuditEntries([]),
     resolveMentionTargetNone,
   );
   assertEqual(result, null, "with truly nobody to tag, this should not surface as a candidate at all");
 
   console.log("PASS: a CP with no possible mention target is excluded rather than surfaced with a broken action.");
+}
+
+async function testCpCandidateCarriesLinkedTsAssignee(): Promise<void> {
+  console.log("\n--- Test: the candidate carries the LINKED TS ticket's assignee, not the CP's own reporter ---");
+
+  const result = await determineCpCandidate(
+    makeIssue({ priority: "High", reporter_account_id: "acc-reporter", updated: daysAgoIso(5) }),
+    "TS-1",
+    "acc-ts-assignee",
+    mockAuditEntries([]),
+    resolveMentionTargetOk,
+  );
+  assertEqual(
+    result?.linkedTsAssigneeAccountId,
+    "acc-ts-assignee",
+    "the candidate must carry the linked TS ticket's own assignee_account_id - " +
+      "\"is this my CP escalation\" is decided by who owns the TS ticket it's blocking, " +
+      "not by who happened to report the CP itself (those are often different people)",
+  );
+
+  console.log("PASS: linkedTsAssigneeAccountId is threaded through from the linked TS issue, independent of the CP's reporter.");
 }
 
 // --- TS product-wait cadence + ordinal (src/lib/productWaitFollowup.ts) ---
@@ -472,6 +500,7 @@ async function main(): Promise<void> {
     await testCpCadenceMediumPriority();
     await testCpLowPriorityAndDoneExcluded();
     await testCpNoMentionTargetExcludesCandidate();
+    await testCpCandidateCarriesLinkedTsAssignee();
     await testProductWaitCadenceAndOrdinal();
     await testExternalFallbackVariesByOrdinal();
     await testExternalDraftRejectsLeakAndFallsBackSafely();

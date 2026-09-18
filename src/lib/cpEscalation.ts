@@ -31,6 +31,7 @@ export interface CpMentionTarget {
 export interface CpEscalationCandidate {
   cp: FormattedIssue;
   daysSinceLastNudge: number;
+  linkedTsAssigneeAccountId?: string;
   linkedTsKey: string;
   mentionTarget: CpMentionTarget;
 }
@@ -81,6 +82,7 @@ export async function resolveCpMentionTarget(cp: FormattedIssue): Promise<CpMent
 export async function determineCpCandidate(
   cp: FormattedIssue,
   linkedTsKey: string,
+  linkedTsAssigneeAccountId: string | undefined,
   getAuditEntries: (issueKey: string) => Promise<FollowUpAuditEntry[]> = getFollowUpAuditEntries,
   resolveMentionTarget: (cp: FormattedIssue) => Promise<CpMentionTarget | null> = resolveCpMentionTarget,
 ): Promise<CpEscalationCandidate | null> {
@@ -108,7 +110,7 @@ export async function determineCpCandidate(
     return null;
   }
 
-  return { cp, daysSinceLastNudge, linkedTsKey, mentionTarget };
+  return { cp, daysSinceLastNudge, linkedTsAssigneeAccountId, linkedTsKey, mentionTarget };
 }
 
 /**
@@ -127,23 +129,28 @@ export async function determineCpCandidate(
 export async function getCpEscalationCandidates(): Promise<CpEscalationCandidate[]> {
   const categoryResults = await Promise.all(Object.keys(CATEGORIES).map((key) => getCategoryIssues(key)));
 
-  const cpToTsKey = new Map<string, string>();
+  // Keyed by CP key so each open CP is only evaluated once even if somehow
+  // linked from more than one open TS ticket - keeps the linked TS issue's
+  // own key/assignee, not just the key, since "is this my CP escalation" is
+  // decided by who owns the LINKED TS TICKET (see agent-followups/page.tsx),
+  // not by the CP's own (often differently-attributed) reporter field.
+  const cpToLinkedTs = new Map<string, { assigneeAccountId?: string; key: string }>();
 
   for (const [, issues] of categoryResults) {
     for (const issue of issues) {
       const linkedCp = issue.linked_cp_issue;
       if (issue.project === "TS" && linkedCp && !linkedCp.isDone) {
-        cpToTsKey.set(linkedCp.key, issue.key);
+        cpToLinkedTs.set(linkedCp.key, { assigneeAccountId: issue.assignee_account_id, key: issue.key });
       }
     }
   }
 
   const results = await mapWithConcurrency(
-    Array.from(cpToTsKey.entries()),
+    Array.from(cpToLinkedTs.entries()),
     5,
-    async ([cpKey, tsKey]) => {
+    async ([cpKey, linkedTs]) => {
       const cp = await getIssueByKey(cpKey);
-      return cp ? determineCpCandidate(cp, tsKey) : null;
+      return cp ? determineCpCandidate(cp, linkedTs.key, linkedTs.assigneeAccountId) : null;
     },
   );
 

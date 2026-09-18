@@ -90,6 +90,14 @@ export function followUpCooldownKey(issueKey: string): string {
   return `followup:last_sent:${issueKey}`;
 }
 
+/* Separate from followUpCooldownKey above - an SLA-breach Slack alert is a
+   different channel and action entirely (Slack, not a Jira comment), so it
+   shouldn't share a cooldown with (or be blocked by) a real Jira follow-up
+   send, and vice versa. */
+export function slaBreachAlertCooldownKey(issueKey: string): string {
+  return `followup:sla_breach_alert:${issueKey}`;
+}
+
 export function followUpAuditLogKey(issueKey: string): string {
   return `followup:log:${issueKey}`;
 }

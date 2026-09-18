@@ -3,7 +3,9 @@ import Link from "next/link";
 import { getCurrentIdentity } from "@/lib/currentIdentity";
 import { Icon } from "@/components/Icon";
 import { IdentityRequired } from "@/components/IdentityRequired";
+import { isEligibleForSlaBreachAlert } from "@/lib/slaBreachAlert";
 import { KpiStrip } from "@/components/KpiStrip";
+import { SlaBreachAlertAction } from "@/components/SlaBreachAlertAction";
 import { SlaFollowUpAction } from "@/components/SlaFollowUpAction";
 import { getSlaFollowUpCandidates } from "@/lib/slaFollowup";
 
@@ -132,8 +134,11 @@ export default async function SlaFollowUpsPage(): Promise<React.ReactElement> {
                       ? `${Math.round(candidate.daysSinceLastActivity * 10) / 10}d`
                       : "—"}
                   </td>
-                  <td className="wrap-cell">
+                  <td className="wrap-cell" style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
                     <SlaFollowUpAction issueKey={candidate.issue.key} stage={candidate.stage} />
+                    {isEligibleForSlaBreachAlert(candidate) ? (
+                      <SlaBreachAlertAction issueKey={candidate.issue.key} />
+                    ) : null}
                   </td>
                 </tr>
               ))}

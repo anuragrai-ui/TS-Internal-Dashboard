@@ -17,6 +17,7 @@
     "test:jira-comment-adf": "npx tsx scripts/test-jira-comment-adf.ts",
     "test:google-sheets-writer": "npx tsx scripts/test-google-sheets-writer.ts",
     "test:llm-client": "npx tsx scripts/test-llm-client.ts",
+    "test:sla-breach-alert": "npx tsx scripts/test-sla-breach-alert.ts",
     "test:slack": "npx tsx scripts/test-slack-signature.ts",
     "test:theme": "npx tsx scripts/test-theme.ts",
     "test:user-jira-tokens": "npx tsx scripts/test-user-jira-tokens.ts",

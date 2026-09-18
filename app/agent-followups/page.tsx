@@ -21,6 +21,12 @@ function mentionSourceLabel(source: string): string {
   if (source === "latest_comment_mention") {
     return "last mentioned";
   }
+  if (source === "pod_em_pm") {
+    return "POD EM + PM";
+  }
+  if (source === "pod_em_pm_manager") {
+    return "POD EM + PM + PM Manager";
+  }
   return "unconfirmed guess";
 }
 
@@ -147,7 +153,7 @@ export default async function AgentFollowUpsPage(): Promise<React.ReactElement> 
                   </td>
                   <td>
                     <div className="cell-with-sub">
-                      <span>{candidate.mentionTarget.displayName}</span>
+                      <span>{candidate.mentionTarget.people.map((person) => person.displayName).join(" and ")}</span>
                       <span
                         className="cell-sub"
                         style={
@@ -164,7 +170,7 @@ export default async function AgentFollowUpsPage(): Promise<React.ReactElement> 
                   <td className="wrap-cell">
                     <CpEscalationAction
                       cpKey={candidate.cp.key}
-                      mentionDisplayName={candidate.mentionTarget.displayName}
+                      mentionDisplayName={candidate.mentionTarget.people.map((person) => person.displayName).join(" and ")}
                       mentionSource={candidate.mentionTarget.source}
                     />
                   </td>

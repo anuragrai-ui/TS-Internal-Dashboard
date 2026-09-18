@@ -3,7 +3,7 @@ import type { FollowUpAuditEntry } from "@/lib/followupAudit";
 import { checkExternalMessageSafety } from "@/lib/messageSafety";
 import { extractLatestMentionFromComments } from "@/lib/jiraClient";
 import type { FormattedIssue } from "@/lib/jiraClient";
-import { determineCpCandidate } from "@/lib/cpEscalation";
+import { determineCpCandidate, resolveCpMentionTarget } from "@/lib/cpEscalation";
 import type { CpMentionTarget } from "@/lib/cpEscalation";
 import { determineProductWaitCandidate, draftProductWaitMessage } from "@/lib/productWaitFollowup";
 import { VALID_KINDS } from "../app/api/tickets/[key]/followup/send/route";
@@ -220,8 +220,7 @@ function testSafetyAllowsOwnKeyAndCleanText(): void {
 // --- CP cadence (src/lib/cpEscalation.ts) ---
 
 const highPriorityMentionTarget: CpMentionTarget = {
-  accountId: "acc-1",
-  displayName: "Test Assignee",
+  people: [{ accountId: "acc-1", displayName: "Test Assignee" }],
   source: "assignee",
 };
 const resolveMentionTargetOk = (): Promise<CpMentionTarget | null> => Promise.resolve(highPriorityMentionTarget);
@@ -333,6 +332,82 @@ async function testCpCandidateCarriesLinkedTsAssignee(): Promise<void> {
   );
 
   console.log("PASS: linkedTsAssigneeAccountId is threaded through from the linked TS issue, independent of the CP's reporter.");
+}
+
+// --- CP POD-based mention ladder (src/lib/cpEscalation.ts, src/lib/podRouting.ts) ---
+
+const MOCK_USER_DIRECTORY: Record<string, { account_id: string; display_name: string }> = {
+  "Akanksha Jain": { account_id: "acc-data-refresh-em", display_name: "Akanksha Jain" },
+  "Prashanth Venkataraman": { account_id: "acc-pm", display_name: "Prashanth Venkataraman" },
+  "Saro Deravanesian": { account_id: "acc-em", display_name: "Saro Deravanesian" },
+  "Simon Hayhurst": { account_id: "acc-pm-manager", display_name: "Simon Hayhurst" },
+};
+
+const mockFindUserByName = (name: string): Promise<{ account_id: string; display_name: string } | null> =>
+  Promise.resolve(MOCK_USER_DIRECTORY[name] ?? null);
+
+async function testCpPodTagsEmAndPmOnFirstNudge(): Promise<void> {
+  console.log("\n--- Test: an unassigned CP tags its POD's EM + PM together on the first nudge ---");
+
+  const cp = makeIssue({ assignee_account_id: undefined, pod: "Credentialing" });
+  const target = await resolveCpMentionTarget(cp, false, mockFindUserByName);
+
+  assertEqual(target?.source, "pod_em_pm", "the first nudge on an unassigned CP should tag the POD's EM+PM");
+  assertEqual(
+    [...(target?.people.map((p) => p.accountId) ?? [])].sort(),
+    ["acc-em", "acc-pm"],
+    "both the Engineering Manager and Product Manager should be tagged",
+  );
+
+  console.log("PASS: Credentialing's EM (Saro Deravanesian) and PM (Prashanth Venkataraman) are both tagged.");
+}
+
+async function testCpPodAddsPmManagerOnRepeatNudge(): Promise<void> {
+  console.log("\n--- Test: a repeat nudge (already sent once, still no response) adds the PM Manager on top ---");
+
+  const cp = makeIssue({ assignee_account_id: undefined, pod: "Credentialing" });
+  const target = await resolveCpMentionTarget(cp, true, mockFindUserByName);
+
+  assertEqual(target?.source, "pod_em_pm_manager", "a repeat nudge should escalate to the pod_em_pm_manager source");
+  assertEqual(
+    [...(target?.people.map((p) => p.accountId) ?? [])].sort(),
+    ["acc-em", "acc-pm", "acc-pm-manager"],
+    "EM, PM, and PM Manager should all be tagged on escalation - broadening visibility, not replacing the original owners",
+  );
+
+  console.log("PASS: Simon Hayhurst (PM Manager) is added alongside the original EM+PM, not instead of them.");
+}
+
+async function testCpPodWithNoPmManagerSkipsThirdTag(): Promise<void> {
+  console.log("\n--- Test: a POD with no PM Manager on file just tags whoever IS known, not a guessed substitute ---");
+
+  const cp = makeIssue({ assignee_account_id: undefined, pod: "Data Refresh" });
+  const target = await resolveCpMentionTarget(cp, true, mockFindUserByName);
+
+  assertEqual(target?.source, "pod_em_pm_manager", "still the escalated tier, even with fewer people actually resolved");
+  assertEqual(
+    target?.people.map((p) => p.accountId),
+    ["acc-data-refresh-em"],
+    "Data Refresh has no PM and no PM Manager on file - only the EM should be tagged, no substitute guessed",
+  );
+
+  console.log("PASS: a blank PM/PM-Manager is skipped rather than guessed.");
+}
+
+async function testCpAssigneeStillTakesPriorityOverPod(): Promise<void> {
+  console.log("\n--- Test: an already-assigned CP still tags just the assignee, not the POD's EM/PM ---");
+
+  const cp = makeIssue({ assignee: "Real Owner", assignee_account_id: "acc-real-owner", pod: "Credentialing" });
+  const target = await resolveCpMentionTarget(cp, false, mockFindUserByName);
+
+  assertEqual(target?.source, "assignee", "a CP with a real assignee has a real current owner - no need to broaden to the POD");
+  assertEqual(
+    target?.people,
+    [{ accountId: "acc-real-owner", displayName: "Real Owner" }],
+    "the assignee should be the sole mention target, not augmented with the POD's EM/PM",
+  );
+
+  console.log("PASS: an assigned CP is untouched by the POD-routing ladder.");
 }
 
 // --- TS product-wait cadence + ordinal (src/lib/productWaitFollowup.ts) ---
@@ -501,6 +576,10 @@ async function main(): Promise<void> {
     await testCpLowPriorityAndDoneExcluded();
     await testCpNoMentionTargetExcludesCandidate();
     await testCpCandidateCarriesLinkedTsAssignee();
+    await testCpPodTagsEmAndPmOnFirstNudge();
+    await testCpPodAddsPmManagerOnRepeatNudge();
+    await testCpPodWithNoPmManagerSkipsThirdTag();
+    await testCpAssigneeStillTakesPriorityOverPod();
     await testProductWaitCadenceAndOrdinal();
     await testExternalFallbackVariesByOrdinal();
     await testExternalDraftRejectsLeakAndFallsBackSafely();

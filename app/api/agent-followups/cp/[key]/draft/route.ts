@@ -19,10 +19,16 @@ export async function POST(
     const cp = await getIssueByKey(key);
 
     if (cp && cp.status_category !== "done") {
+      const mentionAccountIds = Array.isArray(cached.mentionAccountId)
+        ? cached.mentionAccountId
+        : cached.mentionAccountId
+          ? [cached.mentionAccountId]
+          : [];
+
       return NextResponse.json({
         cached: true,
         draftText: cached.text,
-        mentionAccountId: cached.mentionAccountId,
+        mentionAccountIds,
         toolCallCount: cached.toolCallCount,
       });
     }
@@ -47,8 +53,8 @@ export async function POST(
 
   return NextResponse.json({
     draftText: result.text,
-    mentionAccountId: candidate.mentionTarget.accountId,
-    mentionDisplayName: candidate.mentionTarget.displayName,
+    mentionAccountIds: candidate.mentionTarget.people.map((person) => person.accountId),
+    mentionDisplayName: candidate.mentionTarget.people.map((person) => person.displayName).join(" and "),
     mentionSource: candidate.mentionTarget.source,
     toolCallCount: result.toolCallCount,
   });

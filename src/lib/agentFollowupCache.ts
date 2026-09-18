@@ -14,7 +14,10 @@ const DRAFT_TTL_SECONDS = 86_400;
 
 export interface CachedDraft {
   generatedAt: string;
-  mentionAccountId?: string;
+  /* string for every existing single-mention draft kind; string[] only for CP
+     escalations, which can tag a POD's EM+PM (and PM Manager on escalation)
+     together - see buildCommentAdfContent in jiraClient.ts. */
+  mentionAccountId?: string | string[];
   text: string;
   toolCallCount: number;
 }

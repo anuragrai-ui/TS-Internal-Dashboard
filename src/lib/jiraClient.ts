@@ -339,6 +339,58 @@ export async function getCurrentUser(credentials?: JiraCredentials): Promise<Cur
   };
 }
 
+/* Long TTL (7 days): resolving a POD's EM/PM/PM-Manager by name (see
+   src/lib/podRouting.ts) is a org-chart lookup that changes rarely, not
+   per-ticket data - re-searching Jira on every CP escalation draft would be
+   wasteful and slow. Keyed by the exact name string passed in, so a typo'd
+   or since-renamed name just misses the cache rather than serving stale data
+   for the wrong query. */
+const JIRA_USER_SEARCH_TTL_SECONDS = 7 * 86_400;
+
+/**
+ * Resolves a Jira display name (e.g. "Saro Deravanesian", from the POD
+ * org-chart mapping) to that account's real Jira accountId, via Jira's own
+ * user-search endpoint - never guessed or hardcoded, since accountIds are
+ * opaque per-workspace identifiers with no derivable pattern. Returns null
+ * (not a throw) for no match or more than one match, since either case means
+ * this specific name can't be trusted to identify exactly one person -
+ * callers should treat that the same as "nobody to tag" rather than guessing
+ * which of several same-named accounts was meant.
+ */
+export async function findJiraUserByName(
+  name: string,
+): Promise<{ account_id: string; display_name: string } | null> {
+  const cacheKey = `jira_user_search:${name.trim().toLowerCase()}`;
+  const cached = await getCache<{ account_id: string; display_name: string } | null>(cacheKey);
+
+  if (cached) {
+    return cached.value;
+  }
+
+  let matches: JiraAccount[];
+
+  try {
+    matches = await jiraGet<JiraAccount[]>("/user/search", { query: name });
+  } catch (error) {
+    console.warn(`Jira user search failed for "${name}".`, error);
+    return null;
+  }
+
+  const realAccounts = matches.filter((account) => account.accountType === "atlassian");
+
+  if (realAccounts.length !== 1 || !realAccounts[0]?.accountId) {
+    if (realAccounts.length > 1) {
+      console.warn(`Jira user search for "${name}" matched ${realAccounts.length} accounts - ambiguous, treating as unresolved.`);
+    }
+    await setCache(cacheKey, null, JIRA_USER_SEARCH_TTL_SECONDS);
+    return null;
+  }
+
+  const result = { account_id: realAccounts[0].accountId, display_name: realAccounts[0].displayName ?? name };
+  await setCache(cacheKey, result, JIRA_USER_SEARCH_TTL_SECONDS);
+  return result;
+}
+
 const JIRA_FIELDS = [
   "summary",
   "description",
@@ -520,34 +572,42 @@ interface JiraCommentResponse {
 export const MENTION_PLACEHOLDER = "{{MENTION}}";
 
 /**
- * Splits `text` on MENTION_PLACEHOLDER and builds an ADF paragraph with a
- * real `mention` node in its place, when `mentionAccountId` is given. A
- * literal "@name" or "[~accountid:...]" in plain text does NOT create a
- * working Jira mention (no notification, no link) - it has to be this node
- * type. Falls back to a single plain-text node if there's no placeholder or
- * no mentionAccountId.
+ * Splits `text` on every occurrence of MENTION_PLACEHOLDER and builds an ADF
+ * paragraph with a real `mention` node in each spot, consuming
+ * `mentionAccountId` in order (a single string is one mention, same as
+ * before; an array lets a CP escalation tag several people - e.g. a POD's
+ * Engineering Manager and Product Manager together - by repeating the
+ * placeholder in the drafted text once per person). A literal "@name" or
+ * "[~accountid:...]" in plain text does NOT create a working Jira mention
+ * (no notification, no link) - it has to be this node type. Falls back to a
+ * single plain-text node if there's no placeholder or no accountId(s). If
+ * the text has more placeholder occurrences than accountIds were given (should
+ * only happen if a draft's wording drifted from what was resolved), the last
+ * accountId repeats rather than leaving a placeholder as broken literal text.
  */
 export function buildCommentAdfContent(
   text: string,
-  mentionAccountId?: string,
+  mentionAccountId?: string | string[],
 ): Array<Record<string, unknown>> {
-  if (!mentionAccountId || !text.includes(MENTION_PLACEHOLDER)) {
+  const ids = (Array.isArray(mentionAccountId) ? mentionAccountId : [mentionAccountId]).filter(
+    (id): id is string => Boolean(id),
+  );
+
+  if (ids.length === 0 || !text.includes(MENTION_PLACEHOLDER)) {
     return [{ text, type: "text" }];
   }
 
-  const [before, ...rest] = text.split(MENTION_PLACEHOLDER);
-  const after = rest.join(MENTION_PLACEHOLDER);
+  const segments = text.split(MENTION_PLACEHOLDER);
   const content: Array<Record<string, unknown>> = [];
 
-  if (before) {
-    content.push({ text: before, type: "text" });
-  }
-
-  content.push({ attrs: { id: mentionAccountId }, type: "mention" });
-
-  if (after) {
-    content.push({ text: after, type: "text" });
-  }
+  segments.forEach((segment, index) => {
+    if (segment) {
+      content.push({ text: segment, type: "text" });
+    }
+    if (index < segments.length - 1) {
+      content.push({ attrs: { id: ids[index] ?? ids[ids.length - 1] }, type: "mention" });
+    }
+  });
 
   return content;
 }
@@ -555,7 +615,7 @@ export function buildCommentAdfContent(
 export async function addFollowUpComment(
   issueKey: string,
   text: string,
-  mentionAccountId?: string,
+  mentionAccountId?: string | string[],
   credentials?: JiraCredentials,
 ): Promise<{ id: string }> {
   const response = await jiraPost<JiraCommentResponse>(

@@ -13,7 +13,7 @@ type Status = "idle" | "drafting" | "drafted" | "sending" | "sent" | "error";
 interface DraftResponseBody {
   draftText?: string;
   error?: string;
-  mentionAccountId?: string;
+  mentionAccountIds?: string[];
   mentionDisplayName?: string;
   mentionSource?: string;
   toolCallCount?: number;
@@ -34,7 +34,7 @@ export function CpEscalationAction({
 }: CpEscalationActionProps): React.ReactElement {
   const [status, setStatus] = useState<Status>("idle");
   const [draftText, setDraftText] = useState("");
-  const [mentionAccountId, setMentionAccountId] = useState<string | undefined>(undefined);
+  const [mentionAccountIds, setMentionAccountIds] = useState<string[]>([]);
   const [mentionDisplayName, setMentionDisplayName] = useState(initialMentionDisplayName);
   const [mentionSource, setMentionSource] = useState(initialMentionSource);
   const [errorMessage, setErrorMessage] = useState("");
@@ -54,7 +54,7 @@ export function CpEscalationAction({
       }
 
       setDraftText(body.draftText);
-      setMentionAccountId(body.mentionAccountId);
+      setMentionAccountIds(body.mentionAccountIds ?? []);
       if (body.mentionDisplayName) {
         setMentionDisplayName(body.mentionDisplayName);
       }
@@ -73,7 +73,7 @@ export function CpEscalationAction({
 
     try {
       const response = await fetch(`/api/tickets/${cpKey}/followup/send`, {
-        body: JSON.stringify({ kind: "cp_escalation", mentionAccountId, text: draftText }),
+        body: JSON.stringify({ kind: "cp_escalation", mentionAccountIds, text: draftText }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
       });

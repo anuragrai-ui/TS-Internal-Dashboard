@@ -4,6 +4,7 @@ import { draftViaChain } from "@/lib/followupDraft";
 import type { DraftResult } from "@/lib/followupDraft";
 import {
   CATEGORIES,
+  findJiraUserByName,
   getCategoryIssues,
   getIssueByKey,
   getLatestCommentMentions,
@@ -11,6 +12,7 @@ import {
   MENTION_PLACEHOLDER,
 } from "@/lib/jiraClient";
 import type { FormattedIssue, TicketCommentContext } from "@/lib/jiraClient";
+import { resolvePodRoute } from "@/lib/podRouting";
 import { HUMAN_VARIETY_INSTRUCTION, pickVariant } from "@/lib/textVariety";
 
 /** Not user-specified as a number - "every 3 days" for High/Critical, "a week" for Medium, per the user's own list. Low priority is out of scope. */
@@ -20,11 +22,20 @@ const CADENCE_DAYS_BY_PRIORITY: Record<string, number> = {
   Medium: 7,
 };
 
-export type CpMentionSource = "assignee" | "latest_comment_mention" | "unconfirmed_reporter_guess";
+export type CpMentionSource =
+  | "assignee"
+  | "latest_comment_mention"
+  | "pod_em_pm"
+  | "pod_em_pm_manager"
+  | "unconfirmed_reporter_guess";
 
-export interface CpMentionTarget {
+export interface CpMentionPerson {
   accountId: string;
   displayName: string;
+}
+
+export interface CpMentionTarget {
+  people: CpMentionPerson[];
   source: CpMentionSource;
 }
 
@@ -36,39 +47,72 @@ export interface CpEscalationCandidate {
   mentionTarget: CpMentionTarget;
 }
 
+type JiraNameLookup = (name: string) => Promise<{ account_id: string; display_name: string } | null>;
+
+/** Resolves a POD route's names to real Jira accountIds, dropping (not failing on) any name that doesn't resolve to exactly one account - see findJiraUserByName's own contract for why an ambiguous/missing name is treated as "skip this one," not an error. */
+async function resolvePodPeople(names: Array<string | undefined>, findUserByName: JiraNameLookup): Promise<CpMentionPerson[]> {
+  const resolved = await Promise.all(
+    names.filter((name): name is string => Boolean(name)).map((name) => findUserByName(name)),
+  );
+
+  return resolved
+    .filter((user): user is { account_id: string; display_name: string } => user !== null)
+    .map((user) => ({ accountId: user.account_id, displayName: user.display_name }));
+}
+
 /**
- * Resolves who to tag on an unassigned/under-owned CP ticket, in order:
- * (1) the assignee, if any; (2) whoever the reporter already @-mentioned in
- * the most recent comment that mentions anyone - re-running this fresh each
- * cycle (rather than storing a "locked-in" target) means the same person
- * naturally keeps getting tagged as long as nothing's changed, but it also
- * self-corrects if the assignee changes or someone new gets mentioned,
- * rather than nagging a stale target forever; (3) the reporter, as an
- * explicitly-flagged guess (source: "unconfirmed_reporter_guess") for the UI
- * to surface as "no clear owner - please confirm" rather than treating it as
- * settled. A comment can mention more than one person (confirmed live on a
- * real CP ticket) - only the first is used as the actual @-mention target,
- * to reuse the existing single-mention comment infrastructure rather than
- * threading multi-mention support through the whole send pipeline for a
- * rare case.
+ * Resolves who to tag on a CP ticket, in order:
+ * (1) the assignee, if any - the ticket already has a real, current owner,
+ * no need to broaden beyond them;
+ * (2) otherwise ("no tag"), the owning POD's Engineering Manager and Product
+ * Manager together (src/lib/podRouting.ts, keyed by the ticket's own `pod`
+ * field) - both tagged at once (source "pod_em_pm") on the FIRST nudge for
+ * this ticket; once a prior cp_escalation nudge already went out and this is
+ * due again (still no response), the PM Manager is added on top (source
+ * "pod_em_pm_manager") rather than tagging only them - broadening visibility
+ * on escalation, not replacing the original owners;
+ * (3) if the POD is unmapped/unknown or none of its names resolve to a real
+ * Jira account, falls back to the pre-POD-routing ladder: whoever the
+ * reporter already @-mentioned in the most recent comment that mentions
+ * anyone, then the reporter itself as an explicitly-flagged guess (source
+ * "unconfirmed_reporter_guess") for the UI to surface as "please confirm"
+ * rather than treating it as settled;
+ * (4) null if truly nobody can be identified.
+ * Re-running this fresh each cycle (rather than storing a "locked-in"
+ * target) means the same person(s) naturally keep getting tagged as long as
+ * nothing's changed, but it also self-corrects if the assignee changes.
  */
-export async function resolveCpMentionTarget(cp: FormattedIssue): Promise<CpMentionTarget | null> {
+export async function resolveCpMentionTarget(
+  cp: FormattedIssue,
+  hasPriorNudge: boolean,
+  findUserByName: JiraNameLookup = findJiraUserByName,
+): Promise<CpMentionTarget | null> {
   if (cp.assignee_account_id) {
-    return { accountId: cp.assignee_account_id, displayName: cp.assignee, source: "assignee" };
+    return { people: [{ accountId: cp.assignee_account_id, displayName: cp.assignee }], source: "assignee" };
+  }
+
+  const route = resolvePodRoute(cp.pod);
+  const names = hasPriorNudge ? [route.em, route.pm, route.pmManager] : [route.em, route.pm];
+  const people = await resolvePodPeople(names, findUserByName);
+
+  if (people.length > 0) {
+    return { people, source: hasPriorNudge ? "pod_em_pm_manager" : "pod_em_pm" };
   }
 
   const [firstMention] = await getLatestCommentMentions(cp.key);
 
   if (firstMention) {
     return {
-      accountId: firstMention.accountId,
-      displayName: firstMention.displayName,
+      people: [{ accountId: firstMention.accountId, displayName: firstMention.displayName }],
       source: "latest_comment_mention",
     };
   }
 
   if (cp.reporter_account_id) {
-    return { accountId: cp.reporter_account_id, displayName: cp.reporter, source: "unconfirmed_reporter_guess" };
+    return {
+      people: [{ accountId: cp.reporter_account_id, displayName: cp.reporter }],
+      source: "unconfirmed_reporter_guess",
+    };
   }
 
   return null;
@@ -84,7 +128,7 @@ export async function determineCpCandidate(
   linkedTsKey: string,
   linkedTsAssigneeAccountId: string | undefined,
   getAuditEntries: (issueKey: string) => Promise<FollowUpAuditEntry[]> = getFollowUpAuditEntries,
-  resolveMentionTarget: (cp: FormattedIssue) => Promise<CpMentionTarget | null> = resolveCpMentionTarget,
+  resolveMentionTarget: (cp: FormattedIssue, hasPriorNudge: boolean) => Promise<CpMentionTarget | null> = resolveCpMentionTarget,
 ): Promise<CpEscalationCandidate | null> {
   if (cp.status_category === "done") {
     return null;
@@ -104,7 +148,11 @@ export async function determineCpCandidate(
     return null;
   }
 
-  const mentionTarget = await resolveMentionTarget(cp);
+  // A prior cp_escalation entry existing here means we already nudged once
+  // (tagging the POD's EM+PM) and cadence has elapsed again with no
+  // resolution - that's the "no response within SLA" trigger for adding the
+  // PM Manager, not a separate tracked flag.
+  const mentionTarget = await resolveMentionTarget(cp, Boolean(lastNudge));
 
   if (!mentionTarget) {
     return null;
@@ -170,14 +218,23 @@ function urgencyRegister(priority: string): string {
     : "This is a standard-priority nudge - polite and direct is enough, no need to sound urgent.";
 }
 
+function mentionOpeningInstruction(mentionCount: number): string {
+  if (mentionCount <= 1) {
+    return `Open with the literal placeholder text ${MENTION_PLACEHOLDER} exactly as written (it becomes a real Jira @-mention when posted)`;
+  }
+
+  const placeholders = Array(mentionCount).fill(MENTION_PLACEHOLDER).join(" ");
+  return `Open by @-mentioning all ${mentionCount} people this needs to go to - write the literal placeholder text ${MENTION_PLACEHOLDER} exactly as written once per person, back to back (e.g. "${placeholders}"), each becomes a real Jira @-mention when posted`;
+}
+
 function buildCpEscalationSystemPrompt(candidate: CpEscalationCandidate): string {
-  const { cp } = candidate;
+  const { cp, mentionTarget } = candidate;
   const isBug = cp.issue_type === "Bug";
   const ask = isBug ? "ask for an ETA and a fix update" : "ask for an ETA / progress update";
 
-  return `You are an engineering manager drafting a short, direct Jira comment nudging whoever owns this ticket. Write only the comment text itself - no subject line, no markdown, no surrounding quotes.
+  return `You are a calm, courteous engineering manager drafting a short Jira comment nudging whoever owns this ticket for a status update. Write only the comment text itself - no subject line, no markdown, no surrounding quotes.
 
-Open with the literal placeholder text ${MENTION_PLACEHOLDER} exactly as written (it becomes a real Jira @-mention when posted), then ${ask}. This ticket is blocking a client-facing ticket, named as linked_ts_key in the ticket details below - mention that it's blocking a client to convey urgency, without being alarmist. ${urgencyRegister(cp.priority)} This is an internal engineering message - full technical detail is fine. Keep it to 1-3 sentences.
+${mentionOpeningInstruction(mentionTarget.people.length)}, then ${ask}. This ticket is blocking a client-facing ticket, named as linked_ts_key in the ticket details below - mention that it's blocking a client to convey why this matters, without being alarmist or terse. ${urgencyRegister(cp.priority)} Keep the tone warm and collaborative, like checking in with a teammate, not issuing a demand. This is an internal engineering message - full technical detail is fine. Keep it to 1-3 sentences.
 
 ${HUMAN_VARIETY_INSTRUCTION}`;
 }
@@ -203,13 +260,14 @@ ${JSON.stringify(
 }
 
 function buildCpEscalationFallbacks(candidate: CpEscalationCandidate): string[] {
-  const { cp, linkedTsKey } = candidate;
+  const { cp, linkedTsKey, mentionTarget } = candidate;
   const ask = cp.issue_type === "Bug" ? "an ETA and a fix update" : "an ETA / progress update";
+  const mentions = Array(Math.max(mentionTarget.people.length, 1)).fill(MENTION_PLACEHOLDER).join(" ");
 
   return [
-    `${MENTION_PLACEHOLDER} could you share ${ask} on this? It's currently blocking client-facing ticket ${linkedTsKey}. Thanks!`,
-    `${MENTION_PLACEHOLDER} any chance you can get us ${ask} here? ${linkedTsKey} is blocked on this one.`,
-    `${MENTION_PLACEHOLDER} following up on this - we need ${ask} since it's holding up client-facing ${linkedTsKey}.`,
+    `${mentions} could you share ${ask} on this when you get a chance? It's currently blocking client-facing ticket ${linkedTsKey} - really appreciate the help!`,
+    `${mentions} any chance you could get us ${ask} here? ${linkedTsKey} is waiting on this one. Thank you!`,
+    `${mentions} following up on this - would love ${ask} when you're able, since it's holding up client-facing ${linkedTsKey}. Thanks so much!`,
   ];
 }
 

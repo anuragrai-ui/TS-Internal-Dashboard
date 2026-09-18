@@ -15,8 +15,7 @@ export interface CpEscalationListItem {
   daysSinceLastNudge: number;
   linkedTsKey: string;
   mentionTarget: {
-    accountId: string;
-    displayName: string;
+    people: Array<{ accountId: string; displayName: string }>;
     source: string;
   };
 }

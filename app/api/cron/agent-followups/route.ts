@@ -70,7 +70,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     if (result) {
       await setCachedDraft(candidate.cp.key, "cp_escalation", {
         generatedAt: new Date().toISOString(),
-        mentionAccountId: candidate.mentionTarget.accountId,
+        mentionAccountId: candidate.mentionTarget.people.map((person) => person.accountId),
         text: result.text,
         toolCallCount: result.toolCallCount,
       });

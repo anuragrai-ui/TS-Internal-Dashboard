@@ -15,6 +15,10 @@ import { getJiraCredentialsForAccount } from "@/lib/userJiraTokens";
 interface SendFollowUpRequestBody {
   kind?: unknown;
   mentionAccountId?: unknown;
+  /* Plural, CP-escalation-only field: a POD's EM+PM (and PM Manager on
+     escalation) get tagged together - see buildCommentAdfContent in
+     jiraClient.ts. Every other kind still sends the singular field above. */
+  mentionAccountIds?: unknown;
   text?: unknown;
 }
 
@@ -50,14 +54,16 @@ function parseCooldownHours(value: string | undefined): number {
 async function postCommentRetryingWithoutMention(
   key: string,
   text: string,
-  mentionAccountId: string | undefined,
+  mentionAccountId: string | string[] | undefined,
   credentials: JiraCredentials | undefined,
 ): Promise<{ comment: Awaited<ReturnType<typeof addFollowUpComment>>; mentionFailed: boolean }> {
+  const hasMention = Array.isArray(mentionAccountId) ? mentionAccountId.length > 0 : Boolean(mentionAccountId);
+
   try {
     const comment = await addFollowUpComment(key, text, mentionAccountId, credentials);
     return { comment, mentionFailed: false };
   } catch (error) {
-    if (!mentionAccountId) {
+    if (!hasMention) {
       throw error;
     }
     console.warn(`Comment post with mention failed for ${key}; retrying without the mention.`, error);
@@ -92,8 +98,15 @@ export async function POST(
   const kind: FollowUpKind = VALID_KINDS.includes(body.kind as FollowUpKind)
     ? (body.kind as FollowUpKind)
     : "manual";
-  const mentionAccountId =
-    typeof body.mentionAccountId === "string" && body.mentionAccountId ? body.mentionAccountId : undefined;
+  const mentionAccountIds = Array.isArray(body.mentionAccountIds)
+    ? body.mentionAccountIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+    : undefined;
+  const mentionAccountId: string | string[] | undefined =
+    mentionAccountIds && mentionAccountIds.length > 0
+      ? mentionAccountIds
+      : typeof body.mentionAccountId === "string" && body.mentionAccountId
+        ? body.mentionAccountId
+        : undefined;
 
   // The one non-bypassable safety gate: re-fetch the issue and re-derive
   // reporter_is_external server-side (never trust the client), since the

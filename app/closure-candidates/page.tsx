@@ -19,6 +19,9 @@ function reasonLabel(reason: ClosureReason): string {
   if (reason === "similar_issue_resolved") {
     return "Similar ticket resolved";
   }
+  if (reason === "client_unresponsive") {
+    return "No response after 2 follow-ups";
+  }
   return "Retry closing";
 }
 
@@ -30,12 +33,14 @@ export default async function ClosureCandidatesPage(): Promise<React.ReactElemen
     : [];
   const linkedCpCount = candidates.filter((candidate) => candidate.reason === "linked_cp_resolved").length;
   const similarCount = candidates.filter((candidate) => candidate.reason === "similar_issue_resolved").length;
+  const unresponsiveCount = candidates.filter((candidate) => candidate.reason === "client_unresponsive").length;
   const retryCount = candidates.filter((candidate) => candidate.reason === "retry_close").length;
 
   const kpis: KpiItem[] = [
     { label: "Total Candidates", value: candidates.length },
     { label: "Linked CP Resolved", value: linkedCpCount },
     { label: "Similar Ticket Resolved", value: similarCount },
+    { label: "No Response (2+ Follow-Ups)", tone: unresponsiveCount > 0 ? "warning" : undefined, value: unresponsiveCount },
     { label: "Retry Closing", tone: retryCount > 0 ? "danger" : undefined, value: retryCount },
   ];
 
@@ -50,9 +55,10 @@ export default async function ClosureCandidatesPage(): Promise<React.ReactElemen
         <div className="page-title-group">
           <h1 className="page-title">Closure Candidates</h1>
           <p className="page-subtitle">
-            Open TS tickets whose underlying problem appears already resolved elsewhere - a linked CP
-            ticket closed, or a near-identical past ticket was already fixed. Every closure is drafted
-            for review — nothing sends automatically.
+            Open TS tickets ready to close: the underlying problem appears already resolved elsewhere (a
+            linked CP ticket closed, or a near-identical past ticket was already fixed), or the reporter
+            hasn't responded even after a second follow-up. Every closure is drafted for review — nothing
+            sends automatically.
           </p>
         </div>
       </div>
@@ -98,7 +104,11 @@ export default async function ClosureCandidatesPage(): Promise<React.ReactElemen
                     <div className="cell-with-sub">
                       <span
                         className={
-                          candidate.reason === "retry_close" ? "status-badge tone-danger" : "status-badge tone-success"
+                          candidate.reason === "retry_close"
+                            ? "status-badge tone-danger"
+                            : candidate.reason === "client_unresponsive"
+                              ? "status-badge tone-warning"
+                              : "status-badge tone-success"
                         }
                       >
                         {reasonLabel(candidate.reason)}

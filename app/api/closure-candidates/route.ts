@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getClosureCandidates } from "@/lib/closureCandidates";
+import type { ClosureReason } from "@/lib/closureCandidates";
 
 export interface ClosureCandidateListItem {
   explanation: string;
@@ -12,7 +13,7 @@ export interface ClosureCandidateListItem {
     summary?: string;
     url: string;
   };
-  reason: "linked_cp_resolved" | "retry_close" | "similar_issue_resolved";
+  reason: ClosureReason;
   referenceKey?: string;
 }
 

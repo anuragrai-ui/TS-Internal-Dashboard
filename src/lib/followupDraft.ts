@@ -331,6 +331,10 @@ function closureSystemContext(candidate: ClosureCandidate): string {
       : "A previous closing message was already sent to the reporter, but the ticket wasn't actually marked Done - this is a retry. Keep it brief and don't repeat the full original explanation, just confirm this ticket is being closed now.";
   }
 
+  if (reason === "client_unresponsive") {
+    return "We've sent more than one follow-up and haven't heard back from the reporter.";
+  }
+
   if (external) {
     return "We believe the underlying issue has already been resolved, either directly or through related work on our end.";
   }
@@ -341,14 +345,22 @@ function closureSystemContext(candidate: ClosureCandidate): string {
 }
 
 function buildClosureSystemPrompt(candidate: ClosureCandidate): string {
-  const { issue } = candidate;
+  const { issue, reason } = candidate;
   const external = issue.reporter_is_external;
+  const closingBecause =
+    reason === "client_unresponsive"
+      ? "because we've followed up more than once with no response"
+      : "because the underlying issue appears already resolved elsewhere";
+  const ask =
+    reason === "client_unresponsive"
+      ? "Write a polite closing message: note plainly that we haven't heard back after multiple follow-ups and are closing for now - this is about the lack of a response, NOT a claim that the issue is resolved - and invite them to reopen or reply any time if they still need help."
+      : "Write a polite closing message: briefly explain why we believe this is resolved, and invite them to reopen or reply if it isn't.";
 
-  return `You are a support engineer drafting a short, professional Jira comment closing this ticket because the underlying issue appears already resolved elsewhere. Write only the comment text itself - no subject line, no markdown, no surrounding quotes.
+  return `You are a support engineer drafting a short, professional Jira comment closing this ticket ${closingBecause}. Write only the comment text itself - no subject line, no markdown, no surrounding quotes.
 
 ${addressingInstruction(issue)}
 
-${closureSystemContext(candidate)} Write a polite closing message: briefly explain why we believe this is resolved, and invite them to reopen or reply if it isn't. This ticket is being closed right after this message. Keep it to 2-4 sentences.${
+${closureSystemContext(candidate)} ${ask} This ticket is being closed right after this message. Keep it to 2-4 sentences.${
     external ? " Do not mention any other ticket number - describe this only in plain, simple terms." : ""
   }
 
@@ -387,9 +399,17 @@ function buildClosureUserPrompt(
 }
 
 function buildClosureFallbackMessages(candidate: ClosureCandidate): string[] {
-  const { issue } = candidate;
+  const { issue, reason } = candidate;
   const greeting = `Hi ${addressingFallback(issue)},`;
   const summaryClause = issue.summary ? ` regarding "${issue.summary}"` : "";
+
+  if (reason === "client_unresponsive") {
+    return [
+      `${greeting} we've followed up a couple of times on ${issue.key}${summaryClause} but haven't heard back, so we're closing this for now. Please reopen or reply any time if you still need help - we're happy to pick it back up.`,
+      `${greeting} since we haven't heard back after a couple of follow-ups on ${issue.key}${summaryClause}, we're going ahead and closing this out. Just reopen or reach out any time if that's not right.`,
+      `${greeting} we're closing ${issue.key}${summaryClause} since we haven't gotten a response after a few follow-ups - no worries if the timing wasn't right, just reopen or reply whenever you're ready.`,
+    ];
+  }
 
   return [
     `${greeting} we believe the issue on ${issue.key}${summaryClause} has been resolved, so we're closing this ticket. Please reopen or reply any time if you still need help. Thank you.`,

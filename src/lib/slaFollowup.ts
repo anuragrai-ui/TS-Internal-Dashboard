@@ -123,26 +123,33 @@ export async function determineCandidate(
 }
 
 /**
- * Scans TS tickets we're waiting on the reporter for (status "Waiting for
- * Client") and flags the ones due for an SLA follow-up: either the reporter
- * has been silent for 3+ days, or a linked CP (Prod) ticket hasn't been
- * picked up (stage 1); both follow-ups already sent but Jira never actually
- * closed the ticket, e.g. a failed transition (stage 3 - see
- * CLOSE_ATTEMPT_KINDS above). Stage tracking reuses the same Redis audit log
- * the manual follow-up button already writes to (see
- * src/lib/followupAudit.ts).
+ * Scans TS tickets in "Waiting for Client" or "Waiting for Operations" and
+ * flags the ones due for an SLA follow-up: either the reporter has been
+ * silent for 3+ days, or a linked CP (Prod) ticket hasn't been picked up
+ * (stage 1); both follow-ups already sent but Jira never actually closed the
+ * ticket, e.g. a failed transition (stage 3 - see CLOSE_ATTEMPT_KINDS
+ * above). Stage tracking reuses the same Redis audit log the manual
+ * follow-up button already writes to (see src/lib/followupAudit.ts).
+ *
+ * "Waiting for Operations" is included alongside "Waiting for Client" (not
+ * scanned on its own before this) so an Operations-stage ticket that's gone
+ * quiet gets the same cadence tracking - and, downstream, the same
+ * eligibility for the Closure Candidates "client unresponsive" reason and
+ * the SLA-breach Slack alert - that a Waiting-for-Client ticket already had.
  *
  * Every candidate here is a suggestion for a human to review - this module
- * never drafts, sends, or closes anything itself. Note: this only scans
- * "Waiting for Client" tickets, so it catches every stage-3 case that
- * originated from this module's own stage-2 send. A stage-3 case
+ * never drafts, sends, or closes anything itself. A stage-3 case
  * originating from src/lib/closureCandidates.ts's broader all-category scan
- * (a failed closure_candidate transition on a ticket that wasn't in this
- * category) surfaces on the closure-candidates page instead, as a retry.
+ * (a failed closure_candidate transition on a ticket that wasn't in either
+ * category here) surfaces on the closure-candidates page instead, as a
+ * retry.
  */
 export async function getSlaFollowUpCandidates(): Promise<SlaFollowUpCandidate[]> {
-  const [, issues] = await getCategoryIssues("waiting-client");
-  const results = await mapWithConcurrency(issues, 5, determineCandidate);
+  const [[, clientIssues], [, operationsIssues]] = await Promise.all([
+    getCategoryIssues("waiting-client"),
+    getCategoryIssues("waiting-operations"),
+  ]);
+  const results = await mapWithConcurrency([...clientIssues, ...operationsIssues], 5, determineCandidate);
 
   return results.filter((candidate): candidate is SlaFollowUpCandidate => candidate !== null);
 }

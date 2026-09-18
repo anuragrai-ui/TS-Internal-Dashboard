@@ -148,23 +148,81 @@ async function testClosureAttemptDoneIsSkipped(): Promise<void> {
   console.log("PASS: once Done, a closure_candidate ticket is excluded entirely.");
 }
 
-async function testSlaOwnedTicketIsSkipped(): Promise<void> {
-  console.log("\n--- Test: a ticket already committed to SLA closure (stage 2+) is not also suggested here ---");
-
-  const issue = makeIssue({ linked_cp_issues: [{ isDone: true, key: "CP-1", status: "Done" }] });
-  const result = await classifyIssue(issue, mockAuditEntries([makeAuditEntry({ kind: "sla_stage_2" })]));
-
-  assertEqual(result.kind, "skip", "a ticket already sent a stage-2 closure should be skipped here");
+async function testStage1AloneDoesNotTriggerUnresponsiveCandidate(): Promise<void> {
+  console.log("\n--- Test: a mere stage-1 check-in does not surface as a closure candidate here ---");
 
   const stage1Issue = makeIssue({ linked_cp_issues: [{ isDone: true, key: "CP-2", status: "Done" }] });
   const stage1Result = await classifyIssue(stage1Issue, mockAuditEntries([makeAuditEntry({ kind: "sla_stage_1" })]));
   assertEqual(
     stage1Result.kind,
     "candidate",
-    "a mere stage-1 check-in should NOT exclude it - the CP resolving is still worth surfacing",
+    "a mere stage-1 check-in should NOT block it - the CP resolving is still worth surfacing on its own signal",
+  );
+  assert(
+    stage1Result.kind === "candidate" && stage1Result.candidate.reason === "linked_cp_resolved",
+    "with only a stage-1 entry, the resolved-linked-CP signal should still be the one that fires",
   );
 
-  console.log("PASS: only an actual closing commitment (stage 2/3) defers to the SLA page - stage 1 alone does not.");
+  console.log("PASS: only an actual second follow-up (stage 2/3) triggers the unresponsive-reporter check - stage 1 alone does not.");
+}
+
+async function testStage2NoResponseSurfacesAsClientUnresponsive(): Promise<void> {
+  console.log("\n--- Test: stage 2 sent, ticket still open, reporter never replied -> client_unresponsive candidate ---");
+
+  const issue = makeIssue({ status_category: "indeterminate" });
+  const result = await classifyIssue(issue, mockAuditEntries([makeAuditEntry({ kind: "sla_stage_2" })]));
+
+  assertEqual(result.kind, "candidate", "should surface as a candidate, not silently deferred to the SLA tab");
+  assert(
+    result.kind === "candidate" && result.candidate.reason === "client_unresponsive",
+    "reason should be client_unresponsive - a second follow-up already went out with no reply",
+  );
+
+  console.log("PASS: a stage-2 send with no reply surfaces here as \"client unresponsive\", exactly what was requested.");
+}
+
+async function testStage3AlsoSurfacesAsClientUnresponsive(): Promise<void> {
+  console.log("\n--- Test: stage 3 (retry after a failed close attempt) also qualifies ---");
+
+  const issue = makeIssue({ status_category: "indeterminate" });
+  const result = await classifyIssue(issue, mockAuditEntries([makeAuditEntry({ kind: "sla_stage_3" })]));
+
+  assert(
+    result.kind === "candidate" && result.candidate.reason === "client_unresponsive",
+    "a stage-3 entry should also qualify, same as stage 2",
+  );
+
+  console.log("PASS: stage 3 entries are treated the same as stage 2 for this signal.");
+}
+
+async function testStillDoneTicketIsSkippedEvenWithStage2(): Promise<void> {
+  console.log("\n--- Test: a stage-2 send that actually succeeded (ticket now Done) is skipped, not re-surfaced ---");
+
+  const issue = makeIssue({ status_category: "done" });
+  const result = await classifyIssue(issue, mockAuditEntries([makeAuditEntry({ kind: "sla_stage_2" })]));
+
+  assertEqual(result.kind, "skip", "an already-Done ticket should never surface as a candidate, regardless of history");
+
+  console.log("PASS: a successfully-closed ticket is excluded even if it has a stage-2 entry in its history.");
+}
+
+async function testCpNotWorkedTicketIsNotMisclassifiedAsUnresponsive(): Promise<void> {
+  console.log("\n--- Test: if the real blocker is a not-yet-worked linked CP, this is NOT surfaced as \"client unresponsive\" ---");
+
+  // status "Backlog" is the isCpNotWorkedOn fast-path (no live Jira lookup needed for this case).
+  const issue = makeIssue({
+    linked_cp_issue: { isDone: false, key: "CP-9", status: "Backlog" },
+    status_category: "indeterminate",
+  });
+  const result = await classifyIssue(issue, mockAuditEntries([makeAuditEntry({ kind: "sla_stage_2" })]));
+
+  assertEqual(
+    result.kind,
+    "skip",
+    "the reporter isn't actually the problem here - an unworked linked CP is Product's problem, not a reason to suggest closing",
+  );
+
+  console.log("PASS: a stage-2 ticket whose real blocker is an unworked CP is left to CP escalations, not misfiled as unresponsive.");
 }
 
 async function testLinkedCpResolvedIsFreeCandidate(): Promise<void> {
@@ -331,7 +389,11 @@ async function main(): Promise<void> {
     await testStage2MissedSlaBoundary();
     await testClosureRetryFiresWhenNotDone();
     await testClosureAttemptDoneIsSkipped();
-    await testSlaOwnedTicketIsSkipped();
+    await testStage1AloneDoesNotTriggerUnresponsiveCandidate();
+    await testStage2NoResponseSurfacesAsClientUnresponsive();
+    await testStage3AlsoSurfacesAsClientUnresponsive();
+    await testStillDoneTicketIsSkippedEvenWithStage2();
+    await testCpNotWorkedTicketIsNotMisclassifiedAsUnresponsive();
     await testLinkedCpResolvedIsFreeCandidate();
     await testMultipleLinkedCpsRequireAllResolved();
     await testMultipleLinkedCpsAllResolvedIsCandidate();

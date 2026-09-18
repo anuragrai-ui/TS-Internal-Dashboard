@@ -4,8 +4,9 @@ import { CATEGORIES, getCategoryIssues, mapWithConcurrency, searchIssuesSummary 
 import type { FormattedIssue, IssueSummary } from "@/lib/jiraClient";
 import { callChatCompletionChain, getApiKey, getModelChain, isEscalationEnabled } from "@/lib/llmClient";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
+import { isCpNotWorkedOn } from "@/lib/slaFollowup";
 
-export type ClosureReason = "linked_cp_resolved" | "retry_close" | "similar_issue_resolved";
+export type ClosureReason = "client_unresponsive" | "linked_cp_resolved" | "retry_close" | "similar_issue_resolved";
 
 export interface ClosureCandidate {
   explanation: string;
@@ -184,10 +185,13 @@ async function setCache(value: ClosureCandidate[]): Promise<void> {
 
 /**
  * Scans every open TS ticket (all four dashboard categories, not just
- * "Waiting for Client") for two closure signals that have nothing to do
- * with follow-up timing: the linked CP ticket already resolved, or a nearly
- * identical past ticket was already fixed. Every candidate is a suggestion
- * for a human to review - nothing here drafts, sends, or closes anything.
+ * "Waiting for Client") for three closure signals: the linked CP ticket
+ * already resolved, a nearly identical past ticket was already fixed, or
+ * the reporter has gone unresponsive even after a second follow-up (see the
+ * slaCloseAttempted branch in classifyIssue() - reuses the SLA cadence's own
+ * stage-2/3 tracking rather than a separate counter). Every candidate is a
+ * suggestion for a human to review - nothing here drafts, sends, or closes
+ * anything.
  */
 type IssueClassification =
   | { candidate: ClosureCandidate; kind: "candidate" }
@@ -208,13 +212,32 @@ export async function classifyIssue(
     return { kind: "skip" };
   }
 
-  // Already progressing through the day-3/day-6 SLA cadence - that page
-  // owns this ticket's closure, don't also suggest it here.
+  // A stage-2/3 entry means the SLA cadence already sent a second follow-up
+  // (or a retry of one) and the ticket is still open - "the reporter hasn't
+  // responded even after a second follow-up," which is exactly what the
+  // user asked to see surfaced here, not silently owned by the SLA tab
+  // alone. Only when the reporter's own silence is the actual cause,
+  // though: if the real blocker is a not-yet-worked linked CP, that's
+  // Product's problem to fix (CP escalations / the SLA-breach Slack alert
+  // own that), not a reason to suggest closing the ticket.
   const slaCloseAttempted = auditEntries.some(
     (entry) => entry.kind === "sla_stage_2" || entry.kind === "sla_stage_3",
   );
   if (slaCloseAttempted) {
-    return { kind: "skip" };
+    if (issue.status_category === "done") {
+      return { kind: "skip" };
+    }
+    if (await isCpNotWorkedOn(issue)) {
+      return { kind: "skip" };
+    }
+    return {
+      candidate: {
+        explanation: "The reporter hasn't responded even after a second follow-up.",
+        issue,
+        reason: "client_unresponsive",
+      },
+      kind: "candidate",
+    };
   }
 
   // A Story-type linked CP tracks planned work, not a blocking bug/task -

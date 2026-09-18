@@ -346,7 +346,7 @@ Every follow-up/closure message (manual follow-ups, SLA follow-ups, closure cand
 
 ## SLA Follow-Ups
 
-`/sla-followups` surfaces TS tickets (status "Waiting for Client") that have gone 3+ days without progress, for two independent reasons that can each trigger a follow-up:
+`/sla-followups` surfaces TS tickets in **"Waiting for Client" or "Waiting for Operations"** that have gone 3+ days without progress, for two independent reasons that can each trigger a follow-up:
 
 - **No response from reporter** - the ticket hasn't been updated in 3+ days.
 - **Linked CP ticket not worked** - the TS ticket links to a CP (Prod team) ticket (any Jira issue-link type; in practice almost always "Action item") that isn't resolved and is either unassigned, still in `Backlog`/`Selected For Sprint`, or hasn't been updated in 3+ days itself.
@@ -358,7 +358,7 @@ Like the manual follow-up feature, **every step requires a human to click "Send"
 
 **Addressing** is driven by Jira's own `reporter.accountType` field - `"customer"` (external) gets addressed by name in the drafted prose; anything else (internal/employee) gets a real Jira `mention` ADF node (not literal `@name` text, which wouldn't notify anyone) via a `{{MENTION}}` placeholder the LLM is instructed to use, substituted at send time (falls back to addressing by name if an internal reporter is somehow missing an accountId - see `scripts/test-jira-comment-adf.ts`).
 
-**Known approximations, not precise tracking:** "no response from reporter" is approximated as "the ticket hasn't been updated at all" rather than precisely attributing comment authorship - a support agent's own comment would also reset this clock. "No activity" on the linked CP ticket is the same approximation. Review the candidate list before drafting rather than trusting the reason label blindly.
+**Known approximations, not precise tracking:** "no response from reporter" is approximated as "the ticket hasn't been updated at all" rather than precisely attributing comment authorship - a support agent's own comment would also reset this clock. "No activity" on the linked CP ticket is the same approximation. Review the candidate list before drafting rather than trusting the reason label blindly. This also means the "no reporter response" label reads a little loosely for a Waiting-for-Operations ticket - the silence there could just as easily be internal (ops hasn't picked it up), not the client - but the underlying "nothing has happened on this ticket in N days" signal is equally meaningful either way.
 
 ## POD-Based Routing (CP Escalations & SLA-Breach Alerts)
 
@@ -372,7 +372,9 @@ Tagging a real person on Slack needs their Slack user ID, which the org chart do
 
 ## Closure Candidates
 
-`/closure-candidates` (`src/lib/closureCandidates.ts`) surfaces open TS tickets whose underlying problem looks already resolved, via two independent signals: a linked CP ticket resolving, or an AI similarity pass finding a near-identical past ticket that was already fixed. Same draft-then-confirm contract as everywhere else - a candidate is a suggestion, nothing closes without a human clicking Send.
+`/closure-candidates` (`src/lib/closureCandidates.ts`) surfaces open TS tickets ready to close, via three independent signals: a linked CP ticket resolving, an AI similarity pass finding a near-identical past ticket that was already fixed, or the reporter going unresponsive even after a second follow-up (reason `client_unresponsive`). Same draft-then-confirm contract as everywhere else - a candidate is a suggestion, nothing closes without a human clicking Send.
+
+**`client_unresponsive` reuses the SLA Follow-Ups cadence, it doesn't duplicate it.** A ticket that already has an `sla_stage_2` or `sla_stage_3` audit entry (see [SLA Follow-Ups](#sla-follow-ups) above - a second follow-up already sent, still no reply) and is still open now surfaces here too, not just on the SLA tab - exactly "unresponsive even after 2 follow-ups" as requested. It's excluded, though, when the real blocker turns out to be a not-yet-worked linked CP (`isCpNotWorkedOn()`) rather than genuine reporter silence - that's Product's problem to fix (CP Escalations / the SLA-breach Slack alert own it), not a reason to suggest closing. A ticket already at stage 1 alone (only a first check-in sent) does NOT qualify - it takes an actual second follow-up.
 
 **Multi-CP-aware, Story-negated:** a TS ticket can have more than one linked CP ticket (any Jira issue-link type - Action item, Problem/Incident, etc. are all treated the same). `classifyIssue()` requires **every** linked CP to be resolved before treating the ticket as closable - one of several linked CPs resolving is not enough, since the others may still represent open work. **Story-type linked CPs are excluded from this check entirely** (neither required to be resolved, nor able to block on their own), since a Story tracks planned work rather than a blocking bug/task; if every linked CP on a ticket happens to be a Story, this signal contributes nothing and the ticket falls through to the AI similarity check instead, same as having no linked CP at all. See `scripts/test-closure-logic.ts` for the exact boundary cases (partial resolution, full resolution, Story-only).
 

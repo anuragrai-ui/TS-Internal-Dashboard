@@ -24,9 +24,9 @@ export default async function JiraTokenSettingsPage(): Promise<React.ReactElemen
             Registering your own Jira API token identifies this browser as you: the Agent Follow-Ups,
             Sheet AI Follow-Ups, SLA Follow-Ups, Closure Candidates, and History tabs then show only
             tickets assigned to you, and anything you send from them posts under your own Jira account
-            instead of the shared one. Nobody sees another person's tickets on those tabs. If you've
-            already registered, use "Identify as" below to switch which of you a shared browser is
-            currently identified as.
+            instead of the shared one. Nobody sees another person's tickets on those tabs. On a shared
+            machine, switching to a different teammate means <em>they</em> register their own token below
+            (Jira verifies it belongs to them) - there's no one-click "become someone else," by design.
           </p>
           <p className="page-subtitle">
             To create a token: log in to{" "}

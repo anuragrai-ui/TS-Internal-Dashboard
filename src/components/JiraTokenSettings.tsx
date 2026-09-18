@@ -15,11 +15,6 @@ interface RegisterResponseBody {
   user?: RegisteredJiraUser;
 }
 
-interface IdentityResponseBody {
-  error?: string;
-  user?: RegisteredJiraUser;
-}
-
 export function JiraTokenSettings({ currentIdentity, users }: JiraTokenSettingsProps): React.ReactElement {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -27,9 +22,8 @@ export function JiraTokenSettings({ currentIdentity, users }: JiraTokenSettingsP
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [removingId, setRemovingId] = useState<string | null>(null);
-  const [switchingId, setSwitchingId] = useState<string | null>(null);
-  const [switchError, setSwitchError] = useState("");
+  const [removing, setRemoving] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent): Promise<void> => {
     event.preventDefault();
@@ -61,50 +55,29 @@ export function JiraTokenSettings({ currentIdentity, users }: JiraTokenSettingsP
     }
   };
 
+  // Removal is server-enforced to your own registered account (see
+  // app/api/settings/jira-tokens/[accountId]/route.ts) - the button is only
+  // rendered for that one row (isCurrent below) so this never even attempts
+  // a call the server would reject.
   const handleRemove = async (accountId: string): Promise<void> => {
-    setRemovingId(accountId);
+    setRemoving(true);
 
     try {
       await fetch(`/api/settings/jira-tokens/${accountId}`, { method: "DELETE" });
       router.refresh();
     } finally {
-      setRemovingId(null);
-    }
-  };
-
-  const handleIdentifyAs = async (accountId: string): Promise<void> => {
-    setSwitchingId(accountId);
-    setSwitchError("");
-
-    try {
-      const response = await fetch("/api/settings/identity", {
-        body: JSON.stringify({ accountId }),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
-      const body = (await response.json()) as IdentityResponseBody;
-
-      if (!response.ok || !body.user) {
-        setSwitchError(body.error ?? "Failed to switch identity.");
-        return;
-      }
-
-      router.refresh();
-    } catch {
-      setSwitchError("Failed to switch identity.");
-    } finally {
-      setSwitchingId(null);
+      setRemoving(false);
     }
   };
 
   const handleForgetIdentity = async (): Promise<void> => {
-    setSwitchingId("__clear__");
+    setClearing(true);
 
     try {
       await fetch("/api/settings/identity", { method: "DELETE" });
       router.refresh();
     } finally {
-      setSwitchingId(null);
+      setClearing(false);
     }
   };
 
@@ -119,18 +92,18 @@ export function JiraTokenSettings({ currentIdentity, users }: JiraTokenSettingsP
           <div className="followup-panel-actions">
             <button
               className="followup-button"
-              disabled={switchingId === "__clear__"}
+              disabled={clearing}
               onClick={() => void handleForgetIdentity()}
               type="button"
             >
-              {switchingId === "__clear__" ? "Clearing…" : "Not you? Forget this identity"}
+              {clearing ? "Clearing…" : "Not you? Forget this identity"}
             </button>
           </div>
         </div>
       ) : (
         <div className="empty-state">
-          This browser isn't identified as anyone yet - register your token below, or pick yourself from
-          the list if you've already registered.
+          This browser isn't identified as anyone yet - register your own token below to identify it as
+          you.
         </div>
       )}
 
@@ -172,8 +145,6 @@ export function JiraTokenSettings({ currentIdentity, users }: JiraTokenSettingsP
         {successMessage ? <span className="followup-status followup-status-success">{successMessage}</span> : null}
       </form>
 
-      {switchError ? <span className="followup-status followup-status-error">{switchError}</span> : null}
-
       {users.length === 0 ? (
         <div className="empty-state">No team members have registered a personal Jira token yet.</div>
       ) : (
@@ -199,25 +170,19 @@ export function JiraTokenSettings({ currentIdentity, users }: JiraTokenSettingsP
                     </td>
                     <td className="cell-muted">{user.email}</td>
                     <td className="cell-muted">{new Date(user.registeredAt).toLocaleDateString()}</td>
-                    <td style={{ display: "flex", gap: "var(--space-2)" }}>
-                      {!isCurrent ? (
+                    <td>
+                      {isCurrent ? (
                         <button
                           className="followup-button"
-                          disabled={switchingId === user.accountId}
-                          onClick={() => void handleIdentifyAs(user.accountId)}
+                          disabled={removing}
+                          onClick={() => void handleRemove(user.accountId)}
                           type="button"
                         >
-                          {switchingId === user.accountId ? "Switching…" : "Identify as"}
+                          {removing ? "Removing…" : "Remove"}
                         </button>
-                      ) : null}
-                      <button
-                        className="followup-button"
-                        disabled={removingId === user.accountId}
-                        onClick={() => void handleRemove(user.accountId)}
-                        type="button"
-                      >
-                        {removingId === user.accountId ? "Removing…" : "Remove"}
-                      </button>
+                      ) : (
+                        <span className="cell-muted">—</span>
+                      )}
                     </td>
                   </tr>
                 );

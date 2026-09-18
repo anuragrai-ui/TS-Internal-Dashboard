@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { IDENTITY_COOKIE } from "@/lib/currentIdentity";
+import { getCurrentIdentity, IDENTITY_COOKIE } from "@/lib/currentIdentity";
 import { removeUserJiraToken } from "@/lib/userJiraTokens";
 
 export async function DELETE(
@@ -10,16 +10,27 @@ export async function DELETE(
 ): Promise<NextResponse> {
   const { accountId } = await params;
 
+  // Self-service only: without this, anyone at the shared dashboard could
+  // remove a teammate's registration they have no ownership of (a griefing/
+  // denial vector - not impersonation, but still an unauthenticated write on
+  // someone else's identity). Being identified as `accountId` is itself
+  // proof of ownership, since that identity can only be reached by having
+  // that exact account's real Jira email+token pair verified against Jira's
+  // own /myself (see POST /api/settings/jira-tokens) - not by anything
+  // forgeable client-side.
+  const identity = await getCurrentIdentity();
+
+  if (identity?.accountId !== accountId) {
+    return NextResponse.json(
+      { error: "You can only remove your own registered Jira token." },
+      { status: 403 },
+    );
+  }
+
   await removeUserJiraToken(accountId);
 
-  // A removed account can't stay "browsing as" itself - without this, the
-  // cookie would keep pointing at a deleted record until getCurrentIdentity's
-  // registry lookup fails it anyway, but clearing it now avoids a stale
-  // cookie lingering client-side for no reason.
   const store = await cookies();
-  if (store.get(IDENTITY_COOKIE)?.value === accountId) {
-    store.delete(IDENTITY_COOKIE);
-  }
+  store.delete(IDENTITY_COOKIE);
 
   return NextResponse.json({ removed: true });
 }

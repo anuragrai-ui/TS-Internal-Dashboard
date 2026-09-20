@@ -6,7 +6,7 @@
    temperature (now ~0.7, up from 0.1) are the two levers that push back on
    that. */
 export const HUMAN_VARIETY_INSTRUCTION =
-  'Write like a real person having an ordinary day, not a template - vary your opening line, sentence rhythm, and word choice from one ticket to the next. Do not default to a stock opener like "Hi X, following up on..." every time; get to the point in your own words.';
+  'Write like a real person having an ordinary day, not a template - vary your opening line, sentence rhythm, and word choice from one ticket to the next. Do not default to a stock opener like "Hi X, following up on..." every time; get to the point in your own words. Keep the tone calm, warm, and genuinely considerate of whoever is reading this - a client waiting on an answer or a teammate juggling their own queue - never curt, impatient, or transactional, whichever side you\'re writing to.';
 
 /**
  * Deterministically picks one of several phrasing variants for a given seed

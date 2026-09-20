@@ -61,11 +61,11 @@ export async function getProductWaitCandidates(): Promise<ProductWaitCandidate[]
    this text branching on that per ticket. Keeps this cacheable as a single
    system prompt instead of two. */
 function buildInternalSystemPrompt(issue: FormattedIssue): string {
-  return `You are a support engineer drafting a short, professional follow-up comment on a Jira ticket that's waiting on Product/Engineering. Write only the comment text itself - no subject line, no markdown, no surrounding quotes.
+  return `You are a support engineer drafting a short, warm check-in comment on a Jira ticket that's waiting on Product/Engineering. Write only the comment text itself - no subject line, no markdown, no surrounding quotes.
 
 ${addressingInstruction(issue)}
 
-This ticket is "Waiting for Product". If the ticket details include a linked_cp_key, relay the linked ticket's actual current status (given as linked_cp_status) to the reporter plainly. Otherwise, ask Product/Engineering for a status update since there's no linked tracking ticket yet. This is an internal update, not client-facing - full technical detail is fine. Keep it to 2-4 sentences.
+This ticket is "Waiting for Product". If the ticket details include a linked_cp_key, relay the linked ticket's actual current status (given as linked_cp_status) to the reporter plainly and reassuringly. Otherwise, ask Product/Engineering for a status update the way you'd check in with a teammate whose plate you know is full - genuinely curious, not chasing them - since there's no linked tracking ticket yet. This is an internal update, not client-facing - full technical detail is fine. Keep it to 2-4 sentences.
 
 attachment_text (when present) is OCR'd text from the ticket's attachments - use it as context if relevant.
 
@@ -105,9 +105,9 @@ function buildInternalFallbacks(candidate: ProductWaitCandidate): string[] {
   const progress = linkedCp ? ` The linked ticket ${linkedCp.key} is currently "${linkedCp.status}".` : "";
 
   return [
-    `${greeting} checking in on this ticket, which is waiting on Product.${progress} Let us know if there's anything else needed in the meantime.`,
-    `${greeting} wanted to flag this one is still waiting on Product.${progress} Ping us if you need anything from our side to move it along.`,
-    `${greeting} following up since this is still sitting on Product's plate.${progress} Happy to help unblock if there's anything we can do.`,
+    `${greeting} hope you're doing well - just checking in on this ticket, which is waiting on Product.${progress} Let us know if there's anything else needed from our side in the meantime, happy to help!`,
+    `${greeting} no rush at all, just wanted to flag this one is still waiting on Product.${progress} Ping us any time if there's anything you need from us to help move it along.`,
+    `${greeting} following up since this is still sitting on Product's plate - totally understand things get busy.${progress} Happy to help unblock if there's anything we can do.`,
   ];
 }
 

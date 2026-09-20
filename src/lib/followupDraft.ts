@@ -35,9 +35,9 @@ export const TOOL_USE_INSTRUCTION =
 const DRAFT_TEMPERATURE = 0.7;
 
 function buildFollowUpSystemPrompt(external: boolean): string {
-  return `You are a support engineer drafting a short, professional follow-up comment to post directly on a Jira ticket. Write only the comment text itself - no subject line, no markdown, no surrounding quotes.
+  return `You are a support engineer drafting a short, warm follow-up comment to post directly on a Jira ticket. Write only the comment text itself - no subject line, no markdown, no surrounding quotes.
 
-Use the ticket's status (given in the ticket details below) to address the right team (e.g. a ticket "Waiting for Product" should be addressed to the product team, "Waiting for Client" to the client, "Waiting for Operations" to operations). If the ticket details include a pending_reason, reference it directly so the recipient understands what is being asked of them. attachment_text (when present) is OCR'd text from the ticket's attachments - use it as context if relevant. Politely request a status update or an ETA. Keep it to 2-4 sentences.
+Use the ticket's status (given in the ticket details below) to address the right team (e.g. a ticket "Waiting for Product" should be addressed to the product team, "Waiting for Client" to the client, "Waiting for Operations" to operations). If the ticket details include a pending_reason, reference it directly so the recipient understands what is being asked of them. attachment_text (when present) is OCR'd text from the ticket's attachments - use it as context if relevant. Ask for a status update or an ETA the way you'd check in with someone whose time you respect - genuinely curious how it's going, not chasing them. Keep it to 2-4 sentences.
 
 ${HUMAN_VARIETY_INSTRUCTION}${external ? "" : `\n\n${TOOL_USE_INSTRUCTION}`}`;
 }
@@ -69,9 +69,9 @@ function buildFallbackMessages(issue: FormattedIssue): string[] {
   const reasonClause = issue.pending_reason ? ` This has been pending on: ${issue.pending_reason}.` : "";
 
   return [
-    `Hi team, following up on ${issue.key}${summaryClause}.${reasonClause} Could you please share a status update or an ETA when you get a chance? Thank you.`,
-    `Checking in on ${issue.key}${summaryClause} - any update on where this stands?${reasonClause} An ETA would help us plan around it. Thanks!`,
-    `Circling back on ${issue.key}${summaryClause}.${reasonClause} Would appreciate a quick status update or ETA whenever you get a moment.`,
+    `Hi team, hope you're doing well - following up on ${issue.key}${summaryClause}.${reasonClause} Whenever you get a chance, could you share a status update or an ETA? Thank you!`,
+    `Checking in on ${issue.key}${summaryClause} - no rush, just wanted to see where this stands.${reasonClause} An ETA would help us plan around it. Thanks so much!`,
+    `Circling back on ${issue.key}${summaryClause}.${reasonClause} Would really appreciate a quick status update or ETA whenever it's convenient for you.`,
   ];
 }
 
@@ -214,26 +214,26 @@ function slaIntent(candidate: SlaFollowUpCandidate): string {
 
   if (stage === 3) {
     return isResolved
-      ? "This ticket already had two follow-ups sent with no response, and the underlying issue has since been resolved. Write a brief closing message: let them know it's resolved, thank them for their patience, and mention they're welcome to reopen or reply if they still have concerns. This ticket is being closed now."
-      : "This ticket already had two follow-ups sent with no response. Write a brief, final closing message: politely explain we're closing it now since we haven't heard back, and invite them to reopen or reply any time if they still need help. This ticket is being closed now.";
+      ? "This ticket already had two follow-ups sent with no response, and the underlying issue has since been resolved. Write a brief, kind closing message: let them know it's resolved, genuinely thank them for their patience, and mention they're welcome to reopen or reply if they still have concerns. This ticket is being closed now."
+      : "This ticket already had two follow-ups sent with no response. Write a brief, gentle closing message: explain we're closing it now since we haven't heard back, with no hint of blame or impatience, and warmly invite them to reopen or reply any time if they still need help. This ticket is being closed now.";
   }
 
   if (stage === 1) {
     return reason === "cp_not_worked"
-      ? "This is a polite first check-in. The underlying issue is still being worked on internally (tracked via a linked ticket) - let them know it's still in progress and you'll follow up again, without promising a specific date."
-      : "This is a polite first check-in. We're waiting to hear back from them - ask whether they still need help or still have the issue, and remind them what information (if any) we're waiting on.";
+      ? "This is a polite first check-in. The underlying issue is still being worked on internally (tracked via a linked ticket) - let them know it's still in progress and you'll follow up again, without promising a specific date. Reassure, don't just report status."
+      : "This is a polite first check-in. We're waiting to hear back from them - ask whether they still need help or still have the issue, and remind them what information (if any) we're waiting on, in a way that makes it easy and low-pressure for them to reply.";
   }
 
   return isResolved
-    ? "This is a closing message: the underlying issue has since been resolved (via a linked internal ticket or directly by us). Let them know it's fixed, thank them for their patience, and mention they're welcome to reopen or reply if they still have concerns. This ticket is being closed right after this message."
-    : "This is a final notice: an earlier follow-up on this same ticket went unanswered. Politely explain that since we haven't heard back, we're closing this ticket for now, and invite them to reopen or reply any time if they still need help. This ticket is being closed right after this message.";
+    ? "This is a closing message: the underlying issue has since been resolved (via a linked internal ticket or directly by us). Let them know it's fixed, genuinely thank them for their patience, and mention they're welcome to reopen or reply if they still have concerns. This ticket is being closed right after this message."
+    : "This is a final notice: an earlier follow-up on this same ticket went unanswered. Explain gently that since we haven't heard back, we're closing this ticket for now - no hint of blame or impatience - and warmly invite them to reopen or reply any time if they still need help. This ticket is being closed right after this message.";
 }
 
 function buildSlaSystemPrompt(candidate: SlaFollowUpCandidate): string {
   const { issue } = candidate;
   const external = issue.reporter_is_external;
 
-  return `You are a support engineer drafting a short, professional Jira comment. Write only the comment text itself - no subject line, no markdown, no surrounding quotes.
+  return `You are a support engineer drafting a short, warm Jira comment. Write only the comment text itself - no subject line, no markdown, no surrounding quotes.
 
 ${addressingInstruction(issue)}
 
@@ -276,24 +276,24 @@ function buildSlaFallbackMessages(candidate: SlaFollowUpCandidate): string[] {
 
   if (stage === 1) {
     return [
-      `${greeting} following up on ${issue.key}${summaryClause}. Could you please share a status update or an ETA when you get a chance? Thank you.`,
-      `${greeting} wanted to check in on ${issue.key}${summaryClause} - any update on timing? Happy to wait, just want to keep this on our radar.`,
-      `${greeting} circling back on ${issue.key}${summaryClause}. Let us know where things stand whenever you get a chance.`,
+      `${greeting} hope things are going well - following up on ${issue.key}${summaryClause}. Whenever you get a chance, could you share a status update or an ETA? Thank you!`,
+      `${greeting} just wanted to check in on ${issue.key}${summaryClause} - no rush at all, just want to keep it on our radar. Any update on timing?`,
+      `${greeting} circling back on ${issue.key}${summaryClause}. Let us know where things stand whenever it's convenient for you.`,
     ];
   }
 
   if (isResolved) {
     return [
-      `${greeting} the issue on ${issue.key}${summaryClause} has been resolved. We're closing this ticket - please reopen or reply if you still have concerns. Thank you for your patience.`,
-      `${greeting} good news - ${issue.key}${summaryClause} is now resolved on our end, so we're closing it out. Reach back out any time if something's still off.`,
-      `${greeting} this has been taken care of, so we're marking ${issue.key}${summaryClause} closed. Just reply or reopen if you still need us to look at anything.`,
+      `${greeting} the issue on ${issue.key}${summaryClause} has been resolved. We're closing this ticket - please reopen or reply if you still have concerns. Thank you so much for your patience.`,
+      `${greeting} good news - ${issue.key}${summaryClause} is now resolved on our end, so we're closing it out. Reach back out any time if something's still off, we're happy to help.`,
+      `${greeting} this has been taken care of, so we're marking ${issue.key}${summaryClause} closed. Just reply or reopen if you still need us to look at anything - thanks for bearing with us.`,
     ];
   }
 
   return [
-    `${greeting} we haven't heard back on ${issue.key}${summaryClause} after a previous follow-up, so we're closing this ticket for now. Please reopen or reply any time if you still need help.`,
-    `${greeting} since we haven't gotten a response on ${issue.key}${summaryClause}, we're going to close it out for now - feel free to reopen whenever you're ready to pick it back up.`,
-    `${greeting} as we didn't hear back on ${issue.key}${summaryClause}, we're closing this for the time being. No worries though - just reply or reopen any time if you still need this addressed.`,
+    `${greeting} we haven't heard back on ${issue.key}${summaryClause} after a previous follow-up, so we're closing this ticket for now - totally understand if the timing just didn't work out. Please reopen or reply any time if you still need help.`,
+    `${greeting} since we haven't gotten a response on ${issue.key}${summaryClause}, we're going to close it out for now - no worries at all, feel free to reopen whenever you're ready to pick it back up.`,
+    `${greeting} as we didn't hear back on ${issue.key}${summaryClause}, we're closing this for the time being. No hard feelings though - just reply or reopen any time if you still need this addressed.`,
   ];
 }
 
@@ -340,8 +340,8 @@ function closureSystemContext(candidate: ClosureCandidate): string {
   }
 
   return reason === "linked_cp_resolved"
-    ? "The linked ticket named as reference_key in the ticket details below has been resolved - the explanation field there says why. Mention that plainly."
-    : "A very similar past ticket, named as reference_key in the ticket details below, was already resolved - the explanation field there says why. Mention that plainly.";
+    ? "The linked ticket named as reference_key in the ticket details below has been resolved - the explanation field there says why. Mention that plainly, with genuine warmth that this is good news for them."
+    : "A very similar past ticket, named as reference_key in the ticket details below, was already resolved - the explanation field there says why. Mention that plainly, with genuine warmth that this is good news for them.";
 }
 
 function buildClosureSystemPrompt(candidate: ClosureCandidate): string {
@@ -353,10 +353,10 @@ function buildClosureSystemPrompt(candidate: ClosureCandidate): string {
       : "because the underlying issue appears already resolved elsewhere";
   const ask =
     reason === "client_unresponsive"
-      ? "Write a polite closing message: note plainly that we haven't heard back after multiple follow-ups and are closing for now - this is about the lack of a response, NOT a claim that the issue is resolved - and invite them to reopen or reply any time if they still need help."
-      : "Write a polite closing message: briefly explain why we believe this is resolved, and invite them to reopen or reply if it isn't.";
+      ? "Write a gentle closing message: note plainly that we haven't heard back after multiple follow-ups and are closing for now - this is about the lack of a response, NOT a claim that the issue is resolved, and there should be no hint of blame or impatience - and warmly invite them to reopen or reply any time if they still need help."
+      : "Write a warm closing message: share why we believe this is resolved like you're glad to deliver good news, and invite them to reopen or reply if it isn't.";
 
-  return `You are a support engineer drafting a short, professional Jira comment closing this ticket ${closingBecause}. Write only the comment text itself - no subject line, no markdown, no surrounding quotes.
+  return `You are a support engineer drafting a short, warm Jira comment closing this ticket ${closingBecause}. Write only the comment text itself - no subject line, no markdown, no surrounding quotes.
 
 ${addressingInstruction(issue)}
 
@@ -412,9 +412,9 @@ function buildClosureFallbackMessages(candidate: ClosureCandidate): string[] {
   }
 
   return [
-    `${greeting} we believe the issue on ${issue.key}${summaryClause} has been resolved, so we're closing this ticket. Please reopen or reply any time if you still need help. Thank you.`,
-    `${greeting} this looks resolved on our end, so we're going ahead and closing ${issue.key}${summaryClause}. Just reopen or reply if anything's still off.`,
-    `${greeting} we're marking ${issue.key}${summaryClause} closed since the underlying issue appears fixed. Reach back out any time if that's not the case.`,
+    `${greeting} good news - the issue on ${issue.key}${summaryClause} has been resolved, so we're closing this ticket. Please reopen or reply any time if you still need help. Thanks so much for your patience!`,
+    `${greeting} happy to report this looks resolved on our end, so we're going ahead and closing ${issue.key}${summaryClause}. Just reopen or reply if anything's still off - we're glad to take another look.`,
+    `${greeting} we're marking ${issue.key}${summaryClause} closed since the underlying issue appears fixed. Reach back out any time if that's not the case, we're happy to help.`,
   ];
 }
 

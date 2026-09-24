@@ -1,12 +1,12 @@
 import { getFollowUpAuditEntries } from "@/lib/followupAudit";
 import type { FollowUpAuditEntry } from "@/lib/followupAudit";
 import { CATEGORIES, getCategoryIssues, mapWithConcurrency, searchIssuesSummary } from "@/lib/jiraClient";
-import type { FormattedIssue, IssueSummary, LinkedCpIssue } from "@/lib/jiraClient";
+import type { FormattedIssue, IssueSummary } from "@/lib/jiraClient";
+import { hasOpenLinkedCp } from "@/lib/linkedCp";
 import { callChatCompletionChain, getApiKey, getModelChain, isEscalationEnabled } from "@/lib/llmClient";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
 import { getReplyTracking } from "@/lib/replyTracking";
 import type { ReplyTracking } from "@/lib/replyTracking";
-import { isCpNotWorkedOn } from "@/lib/slaFollowup";
 
 export type ClosureReason = "client_unresponsive" | "linked_cp_resolved" | "retry_close" | "similar_issue_resolved";
 
@@ -34,22 +34,6 @@ function getSimilarityLimit(): number {
    too, not only ones sent through this dashboard. */
 export const UNRESPONSIVE_MIN_FOLLOW_UPS = 2;
 export const UNRESPONSIVE_MIN_DAYS = 4;
-
-/* Linked CPs still open, any type (Story included) - not a reason to hide
-   an unresponsive-reporter candidate (nearly every "Waiting for Product"
-   ticket has one, so that would hide almost all of them), but worth naming
-   so whoever closes it can double-check the fix isn't still pending. */
-export function openLinkedCps(issue: FormattedIssue): LinkedCpIssue[] {
-  return (issue.linked_cp_issues ?? []).filter((cp) => !cp.isDone);
-}
-
-function describeOpenCps(cps: LinkedCpIssue[]): string {
-  if (cps.length === 0) {
-    return "";
-  }
-  const list = cps.map((cp) => `${cp.key} (${cp.status})`).join(", ");
-  return ` Linked ${cps.length === 1 ? "ticket" : "tickets"} ${list} ${cps.length === 1 ? "is" : "are"} still open - worth a quick check before closing.`;
-}
 
 const CACHE_KEY = "closure:candidates";
 const CACHE_TTL_SECONDS = 1800;
@@ -227,6 +211,12 @@ export async function classifyIssue(
   getAuditEntries: (issueKey: string) => Promise<FollowUpAuditEntry[]> = getFollowUpAuditEntries,
   getTracking: (issue: FormattedIssue) => Promise<ReplyTracking | null> = getReplyTracking,
 ): Promise<IssueClassification> {
+  // Never close, or suggest closing, while any linked CP is still open -
+  // not even a retry of an earlier close attempt (see src/lib/linkedCp.ts).
+  if (issue.status_category === "done" || hasOpenLinkedCp(issue)) {
+    return { kind: "skip" };
+  }
+
   const auditEntries = await getAuditEntries(issue.key);
   const closureAttempted = auditEntries.some((entry) => entry.kind === "closure_candidate");
 
@@ -241,20 +231,11 @@ export async function classifyIssue(
   // (or a retry of one) and the ticket is still open - "the reporter hasn't
   // responded even after a second follow-up," which is exactly what the
   // user asked to see surfaced here, not silently owned by the SLA tab
-  // alone. Only when the reporter's own silence is the actual cause,
-  // though: if the real blocker is a not-yet-worked linked CP, that's
-  // Product's problem to fix (CP escalations / the SLA-breach Slack alert
-  // own that), not a reason to suggest closing the ticket.
+  // alone. (Open linked CPs were already excluded above.)
   const slaCloseAttempted = auditEntries.some(
     (entry) => entry.kind === "sla_stage_2" || entry.kind === "sla_stage_3",
   );
   if (slaCloseAttempted) {
-    if (issue.status_category === "done") {
-      return { kind: "skip" };
-    }
-    if (await isCpNotWorkedOn(issue)) {
-      return { kind: "skip" };
-    }
     return {
       candidate: {
         explanation: "The reporter hasn't responded even after a second follow-up.",
@@ -265,11 +246,11 @@ export async function classifyIssue(
     };
   }
 
-  // A Story-type linked CP tracks planned work, not a blocking bug/task -
-  // it never gates closure either way, in either direction. A TS ticket
-  // with two or more real (non-Story) linked CPs only counts as resolved
-  // once every one of them is - one resolved CP out of several must not
-  // let this fall through as if the whole blocker was cleared.
+  // Every linked CP is resolved by this point (open ones were excluded
+  // above). A Story-type CP still doesn't count as proof the reporter's
+  // problem is fixed, though - so "resolved" needs at least one resolved
+  // non-Story CP; a ticket linked only to Stories falls through to the
+  // unresponsive / similarity checks below instead.
   const blockingCps = (issue.linked_cp_issues ?? []).filter((cp) => cp.issueType !== "Story");
 
   if (blockingCps.length > 0 && blockingCps.every((cp) => cp.isDone)) {
@@ -291,7 +272,9 @@ export async function classifyIssue(
 
   // Reporter gone quiet, per the ticket's own comments: at least two of our
   // follow-ups in a row with no reply, the latest 4+ days old. Covers every
-  // open status, Waiting for Product included.
+  // open status, Waiting for Product included - either there was never a
+  // CP, or every linked CP has been resolved and the client still hasn't
+  // replied.
   const tracking = await getTracking(issue);
 
   if (
@@ -301,10 +284,9 @@ export async function classifyIssue(
   ) {
     return {
       candidate: {
-        explanation: `No reply from the reporter in ${Math.floor(tracking.daysSinceLastFollowUp ?? 0)} days, after ${tracking.unansweredFollowUps} follow-ups.${describeOpenCps(openLinkedCps(issue))}`,
+        explanation: `No reply from the reporter in ${Math.floor(tracking.daysSinceLastFollowUp ?? 0)} days, after ${tracking.unansweredFollowUps} follow-ups.`,
         issue,
         reason: "client_unresponsive",
-        referenceKey: openLinkedCps(issue)[0]?.key,
       },
       kind: "candidate",
     };

@@ -2,9 +2,15 @@ import { daysSince, getFollowUpAuditEntries, mostRecentEntryOfKind } from "@/lib
 import type { FollowUpAuditEntry } from "@/lib/followupAudit";
 import { getCategoryIssues, getLinkedCpDetail, mapWithConcurrency } from "@/lib/jiraClient";
 import type { FormattedIssue } from "@/lib/jiraClient";
+import { hasOpenLinkedCp } from "@/lib/linkedCp";
 
 export type SlaFollowUpStage = 1 | 2 | 3;
-export type SlaFollowUpReason = "cp_not_worked" | "no_reporter_response";
+/* cp_not_worked: a linked CP is open and nobody's picked it up (Backlog /
+   unassigned / stale) - eligible for the SLA-breach Slack alert.
+   cp_in_progress: a linked CP is open and actively being worked - a
+   reassuring progress check-in only, no PM alert. Either way the ticket
+   stays at stage 1 (never closed) until every linked CP is resolved. */
+export type SlaFollowUpReason = "cp_in_progress" | "cp_not_worked" | "no_reporter_response";
 
 export interface SlaFollowUpCandidate {
   daysSinceLastActivity: number;
@@ -53,11 +59,42 @@ export async function isCpNotWorkedOn(issue: FormattedIssue): Promise<boolean> {
    shows up here as stage 3 regardless of which flow sent it. */
 const CLOSE_ATTEMPT_KINDS = new Set(["closure_candidate", "sla_stage_2", "sla_stage_3"]);
 
+/* While any linked CP is open the ticket is never closed (see
+   src/lib/linkedCp.ts) - so no stage 2/3, just a repeating stage-1
+   "still being worked on" check-in every SLA_DAYS since the last one. An
+   unworked CP with no check-in yet is due right away, same as before. */
+async function openCpCheckIn(
+  issue: FormattedIssue,
+  auditEntries: FollowUpAuditEntry[],
+): Promise<SlaFollowUpCandidate | null> {
+  const cpNotWorked = await isCpNotWorkedOn(issue);
+  const lastCheckIn = mostRecentEntryOfKind(auditEntries, ["sla_stage_1", "sla_stage_2", "sla_stage_3"]);
+  const daysSinceLast = daysSince(lastCheckIn?.posted_at ?? issue.updated);
+
+  if (daysSinceLast < SLA_DAYS && !(cpNotWorked && !lastCheckIn)) {
+    return null;
+  }
+
+  return {
+    daysSinceLastActivity: daysSinceLast,
+    isResolved: false,
+    issue,
+    missedSla: daysSinceLast >= SLA_DAYS + MISSED_SLA_BUFFER_DAYS,
+    reason: cpNotWorked ? "cp_not_worked" : "cp_in_progress",
+    stage: 1,
+  };
+}
+
 export async function determineCandidate(
   issue: FormattedIssue,
   getAuditEntries: (issueKey: string) => Promise<FollowUpAuditEntry[]> = getFollowUpAuditEntries,
 ): Promise<SlaFollowUpCandidate | null> {
   const auditEntries = await getAuditEntries(issue.key);
+
+  if (issue.status_category !== "done" && hasOpenLinkedCp(issue)) {
+    return openCpCheckIn(issue, auditEntries);
+  }
+
   const closeAttempted = auditEntries.some((entry) => CLOSE_ATTEMPT_KINDS.has(entry.kind));
 
   if (closeAttempted) {
@@ -84,7 +121,11 @@ export async function determineCandidate(
     };
   }
 
-  const stage1Entry = auditEntries.find((entry) => entry.kind === "sla_stage_1");
+  // Most recent, not first: a ticket that sat on repeated "CP still in
+  // progress" check-ins (openCpCheckIn above) must get a full SLA_DAYS after
+  // its latest one once the CP resolves - not an instant stage 2 because
+  // its first check-in happened to be weeks ago.
+  const stage1Entry = mostRecentEntryOfKind(auditEntries, ["sla_stage_1"]);
   const cpNotWorked = await isCpNotWorkedOn(issue);
   const reason: SlaFollowUpReason = cpNotWorked ? "cp_not_worked" : "no_reporter_response";
 

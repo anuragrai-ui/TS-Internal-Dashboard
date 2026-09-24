@@ -6,6 +6,7 @@ import type { FollowUpAuditEntry, FollowUpKind } from "@/lib/followupAudit";
 import { followUpAuditLogKey, followUpCooldownKey, trimAndExpireAuditLog } from "@/lib/followupAudit";
 import { getCurrentIdentity } from "@/lib/currentIdentity";
 import { addFollowUpComment, getIssueByKey, JiraRequestError, transitionIssueToDone } from "@/lib/jiraClient";
+import { describeOpenCps, hasOpenLinkedCp } from "@/lib/linkedCp";
 import type { JiraCredentials } from "@/lib/jiraClient";
 import { appendFollowUpLogRow } from "@/lib/googleSheetsWriter";
 import { checkExternalMessageSafety } from "@/lib/messageSafety";
@@ -133,6 +134,20 @@ export async function POST(
         { status: 422 },
       );
     }
+  }
+
+  // Final safety net for the "never close while a CP is open" rule (see
+  // src/lib/linkedCp.ts): `issue` was just re-fetched from Jira, so this
+  // catches a stale page, a hand-crafted request, or a CP linked after the
+  // draft was made - no comment is posted either, since every closing
+  // message says "we're closing this".
+  if (CLOSING_KINDS.includes(kind) && hasOpenLinkedCp(issue)) {
+    return NextResponse.json(
+      {
+        error: `${key} can't be closed while its linked CP is still open (${describeOpenCps(issue)}). Send a regular follow-up instead.`,
+      },
+      { status: 409 },
+    );
   }
 
   // Stage 3 only exists because an earlier closing attempt (stage 2 or a

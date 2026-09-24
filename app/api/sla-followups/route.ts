@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSlaFollowUpCandidates } from "@/lib/slaFollowup";
+import type { SlaFollowUpReason } from "@/lib/slaFollowup";
 
 export interface SlaFollowUpListItem {
   daysSinceLastActivity: number;
@@ -16,7 +17,7 @@ export interface SlaFollowUpListItem {
     url: string;
   };
   missedSla: boolean;
-  reason: "cp_not_worked" | "no_reporter_response";
+  reason: SlaFollowUpReason;
   stage: 1 | 2 | 3;
 }
 

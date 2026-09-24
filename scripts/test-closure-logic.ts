@@ -262,7 +262,7 @@ async function testLinkedCpResolvedIsFreeCandidate(): Promise<void> {
 }
 
 async function testMultipleLinkedCpsRequireAllResolved(): Promise<void> {
-  console.log("\n--- Test: with 2+ linked CPs, one resolved is NOT enough - all must be resolved ---");
+  console.log("\n--- Test: with 2+ linked CPs, one resolved is NOT enough - an open one blocks closing entirely ---");
 
   const issue = makeIssue({
     linked_cp_issues: [
@@ -272,13 +272,9 @@ async function testMultipleLinkedCpsRequireAllResolved(): Promise<void> {
   });
   const result = await classifyIssue(issue, mockAuditEntries([]));
 
-  assertEqual(
-    result.kind,
-    "needs-similarity",
-    "one resolved CP out of two should NOT auto-qualify - it must fall through, not be treated as closable",
-  );
+  assertEqual(result.kind, "skip", "one resolved CP out of two must not make the ticket closable - CP-2 is still open");
 
-  console.log("PASS: a partially-resolved multi-CP link does not surface as a free candidate.");
+  console.log("PASS: a partially-resolved multi-CP link is never a closure candidate.");
 }
 
 async function testMultipleLinkedCpsAllResolvedIsCandidate(): Promise<void> {
@@ -304,28 +300,35 @@ async function testMultipleLinkedCpsAllResolvedIsCandidate(): Promise<void> {
   console.log("PASS: every linked CP resolved surfaces as a candidate, naming all of them.");
 }
 
-async function testStoryTypeCpIsIgnoredForClosure(): Promise<void> {
-  console.log("\n--- Test: a Story-type linked CP never blocks or contributes to closure - it's negated entirely ---");
+async function testOpenStoryCpBlocksClosure(): Promise<void> {
+  console.log("\n--- Test: an open Story-type CP blocks closing too - any open CP does ---");
 
-  const issue = makeIssue({
-    linked_cp_issues: [
-      { isDone: false, issueType: "Story", key: "CP-1", status: "Backlog" },
-      { isDone: true, issueType: "Task", key: "CP-2", status: "Done" },
-    ],
-  });
-  const result = await classifyIssue(issue, mockAuditEntries([]));
+  const openStory = await classifyIssue(
+    makeIssue({
+      linked_cp_issues: [
+        { isDone: false, issueType: "Story", key: "CP-1", status: "Backlog" },
+        { isDone: true, issueType: "Task", key: "CP-2", status: "Done" },
+      ],
+    }),
+    mockAuditEntries([]),
+  );
+  assertEqual(openStory.kind, "skip", "an open Story CP next to a resolved Task CP still blocks closing");
 
-  assertEqual(
-    result.kind,
-    "candidate",
-    "an unresolved Story-type CP alongside a resolved Task CP should still qualify - Story doesn't block",
+  const bothDone = await classifyIssue(
+    makeIssue({
+      linked_cp_issues: [
+        { isDone: true, issueType: "Story", key: "CP-1", status: "Done" },
+        { isDone: true, issueType: "Task", key: "CP-2", status: "Done" },
+      ],
+    }),
+    mockAuditEntries([]),
   );
   assert(
-    result.kind === "candidate" && result.candidate.referenceKey === "CP-2",
-    "should reference the real (non-Story) resolved CP, not the ignored Story one",
+    bothDone.kind === "candidate" && bothDone.candidate.reason === "linked_cp_resolved" && bothDone.candidate.referenceKey === "CP-2",
+    "once everything is resolved, the real (non-Story) CP is what proves the fix",
   );
 
-  console.log("PASS: Story-type linked CPs are excluded from the closure check entirely, in either direction.");
+  console.log("PASS: open Story CPs block closure; resolved ones still don't count as proof of a fix on their own.");
 }
 
 async function testAllStoryTypeCpsGiveNoSignal(): Promise<void> {
@@ -392,30 +395,84 @@ async function testUnresponsiveThresholdsBothRequired(): Promise<void> {
   console.log("PASS: both thresholds must be met.");
 }
 
-async function testOpenLinkedCpIsNamedNotHidden(): Promise<void> {
-  console.log("\n--- Test: an open linked CP doesn't hide an unresponsive candidate, but is named in the explanation ---");
+async function testOpenLinkedCpBlocksEveryClosingPath(): Promise<void> {
+  console.log("\n--- Test: an open linked CP blocks every closing path - unresponsive, SLA stage 2, even a retry ---");
 
-  const result = await classifyIssue(
-    makeIssue({
-      linked_cp_issues: [{ isDone: false, issueType: "Story", key: "CP-8", status: "Backlog" }],
-      status: "Waiting for Product",
-    }),
+  const openCp = { linked_cp_issues: [{ isDone: false, issueType: "Bug", key: "CP-8", status: "In Progress" }] };
+  let trackingFetched = false;
+
+  const unresponsive = await classifyIssue(makeIssue({ ...openCp, status: "Waiting for Product" }), mockAuditEntries([]), () => {
+    trackingFetched = true;
+    return Promise.resolve(makeTracking(4, 20));
+  });
+  assertEqual(unresponsive.kind, "skip", "4 unanswered follow-ups don't matter while the fix is still pending");
+  assert(!trackingFetched, "shouldn't even fetch comment history for a ticket that can't be closed");
+
+  const afterStage2 = await classifyIssue(makeIssue(openCp), mockAuditEntries([makeAuditEntry({ kind: "sla_stage_2" })]));
+  assertEqual(afterStage2.kind, "skip", "SLA stage-2 history doesn't make it closable either");
+
+  const retry = await classifyIssue(makeIssue(openCp), mockAuditEntries([makeAuditEntry({ kind: "closure_candidate" })]));
+  assertEqual(retry.kind, "skip", "no retry-close while a CP is open (e.g. one linked after the first attempt)");
+
+  console.log("PASS: nothing suggests closing a ticket with an open linked CP.");
+}
+
+async function testClientUnresponsiveAfterCpResolved(): Promise<void> {
+  console.log("\n--- Test: no CP at all, or every CP resolved + client quiet -> closable ---");
+
+  const noCp = await classifyIssue(makeIssue(), mockAuditEntries([]), mockTracking(makeTracking(2, 5)));
+  assert(noCp.kind === "candidate" && noCp.candidate.reason === "client_unresponsive", "no CP + unresponsive client -> closable");
+
+  const storyDone = await classifyIssue(
+    makeIssue({ linked_cp_issues: [{ isDone: true, issueType: "Story", key: "CP-3", status: "Done" }] }),
     mockAuditEntries([]),
-    mockTracking(makeTracking(2, 6)),
-  );
-
-  assert(
-    result.kind === "candidate" && result.candidate.reason === "client_unresponsive",
-    "still surfaced - nearly every Waiting for Product ticket has an open CP",
+    mockTracking(makeTracking(2, 5)),
   );
   assert(
-    result.kind === "candidate" &&
-      result.candidate.explanation.includes("CP-8 (Backlog)") &&
-      result.candidate.referenceKey === "CP-8",
-    "the open CP should be named so whoever closes it can double-check",
+    storyDone.kind === "candidate" && storyDone.candidate.reason === "client_unresponsive",
+    "CP resolved and the client still hasn't replied -> closable",
   );
 
-  console.log("PASS: open linked CP is flagged in the explanation rather than silently hiding the candidate.");
+  console.log("PASS: closable exactly when there's no open CP and the client has gone quiet.");
+}
+
+async function testSlaNeverClosesWhileCpOpen(): Promise<void> {
+  console.log("\n--- Test: SLA cadence stays at a stage-1 check-in while a CP is open, never the stage-2 close ---");
+
+  const inProgress = { linked_cp_issues: [{ isDone: false, issueType: "Bug", key: "CP-5", status: "In Progress" }] };
+  // linked_cp_issue left unset here so isCpNotWorkedOn() short-circuits instead of doing a live Jira lookup.
+  const afterCheckIn = await determineCandidate(
+    makeIssue({ ...inProgress, linked_cp_issue: undefined }),
+    mockAuditEntries([makeAuditEntry({ kind: "sla_stage_1", posted_at: daysAgoIso(4) })]),
+  );
+  assertEqual(afterCheckIn?.stage, 1, "a second check-in, not the stage-2 closing notice");
+  assertEqual(afterCheckIn?.reason, "cp_in_progress", "reason says the CP is being worked");
+
+  const tooSoon = await determineCandidate(
+    makeIssue({ ...inProgress, linked_cp_issue: undefined }),
+    mockAuditEntries([makeAuditEntry({ kind: "sla_stage_1", posted_at: daysAgoIso(1) })]),
+  );
+  assertEqual(tooSoon, null, "check-ins still respect the 3-day cadence");
+
+  const backlog = { isDone: false, issueType: "Bug", key: "CP-6", status: "Backlog" };
+  const afterFailedClose = await determineCandidate(
+    makeIssue({ linked_cp_issue: backlog, linked_cp_issues: [backlog] }),
+    mockAuditEntries([makeAuditEntry({ kind: "sla_stage_2", posted_at: daysAgoIso(4) })]),
+  );
+  assertEqual(afterFailedClose?.stage, 1, "no stage-3 retry-close while a CP is open");
+  assertEqual(afterFailedClose?.reason, "cp_not_worked", "an unworked Backlog CP keeps the cp_not_worked reason (SLA-breach alert)");
+
+  const resolvedCp = { isDone: true, issueType: "Bug", key: "CP-7", status: "Done" };
+  const justResolved = await determineCandidate(
+    makeIssue({ linked_cp_issue: resolvedCp, linked_cp_issues: [resolvedCp] }),
+    mockAuditEntries([
+      makeAuditEntry({ kind: "sla_stage_1", posted_at: daysAgoIso(20) }),
+      makeAuditEntry({ kind: "sla_stage_1", posted_at: daysAgoIso(1) }),
+    ]),
+  );
+  assertEqual(justResolved, null, "once the CP resolves, the closing step waits 3 days from the LATEST check-in, not the first");
+
+  console.log("PASS: SLA follow-ups never close a ticket with an open CP.");
 }
 
 // --- parseSimilarityMatches (src/lib/closureCandidates.ts) ---
@@ -475,12 +532,14 @@ async function main(): Promise<void> {
     await testLinkedCpResolvedIsFreeCandidate();
     await testMultipleLinkedCpsRequireAllResolved();
     await testMultipleLinkedCpsAllResolvedIsCandidate();
-    await testStoryTypeCpIsIgnoredForClosure();
+    await testOpenStoryCpBlocksClosure();
     await testAllStoryTypeCpsGiveNoSignal();
     await testNoSignalNeedsSimilarityCheck();
     await testTwoUnansweredFollowUpsAndFourDaysIsUnresponsive();
     await testUnresponsiveThresholdsBothRequired();
-    await testOpenLinkedCpIsNamedNotHidden();
+    await testOpenLinkedCpBlocksEveryClosingPath();
+    await testClientUnresponsiveAfterCpResolved();
+    await testSlaNeverClosesWhileCpOpen();
     testParsesGenuineMatches();
     testIgnoresMalformedEntries();
     testEmptyOrUnparseableInput();

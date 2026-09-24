@@ -219,8 +219,8 @@ function slaIntent(candidate: SlaFollowUpCandidate): string {
   }
 
   if (stage === 1) {
-    return reason === "cp_not_worked"
-      ? "This is a polite first check-in. The underlying issue is still being worked on internally (tracked via a linked ticket) - let them know it's still in progress and you'll follow up again, without promising a specific date. Reassure, don't just report status."
+    return reason === "cp_not_worked" || reason === "cp_in_progress"
+      ? "This is a polite check-in. The underlying issue is still being worked on internally (tracked via a linked ticket) - let them know it's still in progress and you'll follow up again, without promising a specific date. Reassure, don't just report status."
       : "This is a polite first check-in. We're waiting to hear back from them - ask whether they still need help or still have the issue, and remind them what information (if any) we're waiting on, in a way that makes it easy and low-pressure for them to reply.";
   }
 

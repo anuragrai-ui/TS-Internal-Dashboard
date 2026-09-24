@@ -10,11 +10,15 @@ import { SlaFollowUpAction } from "@/components/SlaFollowUpAction";
 import { getSlaFollowUpCandidates } from "@/lib/slaFollowup";
 
 import type { KpiItem } from "@/components/KpiStrip";
+import type { SlaFollowUpReason } from "@/lib/slaFollowup";
 
 export const dynamic = "force-dynamic";
 
-function reasonLabel(reason: "cp_not_worked" | "no_reporter_response"): string {
-  return reason === "cp_not_worked" ? "Linked CP not worked" : "No reporter response";
+function reasonLabel(reason: SlaFollowUpReason): string {
+  if (reason === "cp_not_worked") {
+    return "Linked CP not worked";
+  }
+  return reason === "cp_in_progress" ? "Linked CP in progress" : "No reporter response";
 }
 
 export default async function SlaFollowUpsPage(): Promise<React.ReactElement> {

@@ -5,6 +5,7 @@ import { CpEscalationAction } from "@/components/CpEscalationAction";
 import { getCpEscalationCandidates } from "@/lib/cpEscalation";
 import { UNRESPONSIVE_MIN_DAYS, UNRESPONSIVE_MIN_FOLLOW_UPS } from "@/lib/closureCandidates";
 import { getCurrentIdentity } from "@/lib/currentIdentity";
+import { hasOpenLinkedCp } from "@/lib/linkedCp";
 import { getProductWaitCandidates } from "@/lib/productWaitFollowup";
 import { Icon } from "@/components/Icon";
 import { IdentityRequired } from "@/components/IdentityRequired";
@@ -46,6 +47,7 @@ function formatDaysAgo(days: number | null | undefined): string {
    imported rather than restated so the two tabs can't drift apart. */
 function isReadyToClose(candidate: ProductWaitCandidate): boolean {
   return (
+    !hasOpenLinkedCp(candidate.issue) &&
     (candidate.unansweredFollowUps ?? 0) >= UNRESPONSIVE_MIN_FOLLOW_UPS &&
     (candidate.daysSinceLastFollowUp ?? 0) >= UNRESPONSIVE_MIN_DAYS
   );
@@ -217,7 +219,8 @@ export default async function AgentFollowUpsPage(): Promise<React.ReactElement> 
           TS tickets "Waiting for Product" for 3+ days since the last follow-up (or ever, for a first one).
           Follow-up counts and days come from the ticket's own Jira comments, so replies posted directly in
           Jira count too. After {UNRESPONSIVE_MIN_FOLLOW_UPS} unanswered follow-ups and {UNRESPONSIVE_MIN_DAYS}+
-          quiet days, a ticket also shows up in <Link href="/closure-candidates">Closure Candidates</Link>.
+          quiet days, a ticket also shows up in <Link href="/closure-candidates">Closure Candidates</Link> -
+          but never while a linked CP is still open.
         </p>
       </div>
 

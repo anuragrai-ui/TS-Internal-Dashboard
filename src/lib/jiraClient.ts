@@ -442,6 +442,23 @@ async function getIssueComments(issueKey: string): Promise<JiraComment[]> {
   return data.comments ?? [];
 }
 
+/** Just who posted each comment and when - enough for src/lib/replyTracking.ts to work out who's waiting on whom, without carrying comment bodies around. */
+export interface CommentAuthorship {
+  authorAccountId?: string;
+  authorAccountType?: string;
+  created: string;
+}
+
+export async function getIssueCommentAuthorship(issueKey: string): Promise<CommentAuthorship[]> {
+  const comments = await getIssueComments(issueKey);
+
+  return comments.map((comment) => ({
+    authorAccountId: comment.author?.accountId,
+    authorAccountType: comment.author?.accountType,
+    created: comment.created ?? "",
+  }));
+}
+
 export async function getTicketCommentContext(
   issueKey: string,
 ): Promise<TicketCommentContext[]> {
@@ -563,6 +580,69 @@ export async function searchIssuesSummary(jql: string, maxResults = 5): Promise<
       updated: formatted.updated,
     };
   });
+}
+
+export interface ClosedIssueSummary {
+  closedAt: string;
+  key: string;
+  reporter: string;
+  status?: string;
+  summary?: string;
+  url: string;
+}
+
+/**
+ * Paginated (nextPageToken) search returning just enough to list a closed
+ * ticket - searchIssues() above stops at one page, which is fine for open
+ * queues but not for "everything closed in the last six weeks". Capped at
+ * maxTotal so a runaway JQL can't page forever.
+ */
+export async function searchClosedIssues(jql: string, maxTotal = 1000): Promise<ClosedIssueSummary[]> {
+  const baseUrl = JIRA_BASE_URL?.replace(/\/+$/, "") ?? "";
+  const results: ClosedIssueSummary[] = [];
+  let nextPageToken: string | undefined;
+
+  do {
+    const data = await jiraGet<{
+      issues?: Array<{
+        fields: {
+          reporter?: JiraAccount | null;
+          resolutiondate?: string | null;
+          status?: JiraStatus | null;
+          statuscategorychangedate?: string | null;
+          summary?: string;
+        };
+        key: string;
+      }>;
+      nextPageToken?: string;
+    }>("/search/jql", {
+      fields: "summary,status,reporter,statuscategorychangedate,resolutiondate",
+      jql,
+      maxResults: 100,
+      ...(nextPageToken ? { nextPageToken } : {}),
+    });
+
+    for (const issue of data.issues ?? []) {
+      results.push({
+        closedAt: issue.fields.statuscategorychangedate ?? issue.fields.resolutiondate ?? "",
+        key: issue.key,
+        reporter: issue.fields.reporter?.displayName ?? "",
+        status: issue.fields.status?.name,
+        summary: issue.fields.summary,
+        url: `${baseUrl}/browse/${issue.key}`,
+      });
+    }
+
+    nextPageToken = data.nextPageToken;
+  } while (nextPageToken && results.length < maxTotal);
+
+  return results;
+}
+
+/** Jira's own approximate count for a JQL - one call regardless of how many issues match, for totals too large to page through. */
+export async function countIssues(jql: string): Promise<number> {
+  const data = await jiraPost<{ count?: number }>("/search/approximate-count", { jql });
+  return data.count ?? 0;
 }
 
 interface JiraCommentResponse {

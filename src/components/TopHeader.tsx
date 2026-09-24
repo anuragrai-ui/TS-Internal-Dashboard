@@ -15,8 +15,13 @@ const CATEGORY_TITLES: Record<string, string> = {
 };
 
 const SECTION_TITLES: Record<string, string> = {
+  "agent-followups": "Agent Follow-Ups",
+  backlog: "Team Sheet Backlog",
+  "closure-candidates": "Closure Candidates",
   history: "History",
+  "sheet-followups": "Sheet AI Follow-Ups",
   "sla-followups": "SLA Follow-Ups",
+  "weekly-closures": "Weekly Closures",
 };
 
 function useBreadcrumb(): string[] {

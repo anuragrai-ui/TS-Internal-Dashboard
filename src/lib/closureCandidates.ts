@@ -1,9 +1,11 @@
 import { getFollowUpAuditEntries } from "@/lib/followupAudit";
 import type { FollowUpAuditEntry } from "@/lib/followupAudit";
 import { CATEGORIES, getCategoryIssues, mapWithConcurrency, searchIssuesSummary } from "@/lib/jiraClient";
-import type { FormattedIssue, IssueSummary } from "@/lib/jiraClient";
+import type { FormattedIssue, IssueSummary, LinkedCpIssue } from "@/lib/jiraClient";
 import { callChatCompletionChain, getApiKey, getModelChain, isEscalationEnabled } from "@/lib/llmClient";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
+import { getReplyTracking } from "@/lib/replyTracking";
+import type { ReplyTracking } from "@/lib/replyTracking";
 import { isCpNotWorkedOn } from "@/lib/slaFollowup";
 
 export type ClosureReason = "client_unresponsive" | "linked_cp_resolved" | "retry_close" | "similar_issue_resolved";
@@ -25,6 +27,28 @@ function parseIntEnv(value: string | undefined, fallback: number): number {
 
 function getSimilarityLimit(): number {
   return parseIntEnv(process.env.CLOSURE_SIMILARITY_LIMIT, 20);
+}
+
+/* "We've asked twice and it's been 4+ days with no reply" - read from the
+   ticket's real Jira comments, so follow-ups posted directly in Jira count
+   too, not only ones sent through this dashboard. */
+export const UNRESPONSIVE_MIN_FOLLOW_UPS = 2;
+export const UNRESPONSIVE_MIN_DAYS = 4;
+
+/* Linked CPs still open, any type (Story included) - not a reason to hide
+   an unresponsive-reporter candidate (nearly every "Waiting for Product"
+   ticket has one, so that would hide almost all of them), but worth naming
+   so whoever closes it can double-check the fix isn't still pending. */
+export function openLinkedCps(issue: FormattedIssue): LinkedCpIssue[] {
+  return (issue.linked_cp_issues ?? []).filter((cp) => !cp.isDone);
+}
+
+function describeOpenCps(cps: LinkedCpIssue[]): string {
+  if (cps.length === 0) {
+    return "";
+  }
+  const list = cps.map((cp) => `${cp.key} (${cp.status})`).join(", ");
+  return ` Linked ${cps.length === 1 ? "ticket" : "tickets"} ${list} ${cps.length === 1 ? "is" : "are"} still open - worth a quick check before closing.`;
 }
 
 const CACHE_KEY = "closure:candidates";
@@ -201,6 +225,7 @@ type IssueClassification =
 export async function classifyIssue(
   issue: FormattedIssue,
   getAuditEntries: (issueKey: string) => Promise<FollowUpAuditEntry[]> = getFollowUpAuditEntries,
+  getTracking: (issue: FormattedIssue) => Promise<ReplyTracking | null> = getReplyTracking,
 ): Promise<IssueClassification> {
   const auditEntries = await getAuditEntries(issue.key);
   const closureAttempted = auditEntries.some((entry) => entry.kind === "closure_candidate");
@@ -264,6 +289,27 @@ export async function classifyIssue(
     };
   }
 
+  // Reporter gone quiet, per the ticket's own comments: at least two of our
+  // follow-ups in a row with no reply, the latest 4+ days old. Covers every
+  // open status, Waiting for Product included.
+  const tracking = await getTracking(issue);
+
+  if (
+    tracking &&
+    tracking.unansweredFollowUps >= UNRESPONSIVE_MIN_FOLLOW_UPS &&
+    (tracking.daysSinceLastFollowUp ?? 0) >= UNRESPONSIVE_MIN_DAYS
+  ) {
+    return {
+      candidate: {
+        explanation: `No reply from the reporter in ${Math.floor(tracking.daysSinceLastFollowUp ?? 0)} days, after ${tracking.unansweredFollowUps} follow-ups.${describeOpenCps(openLinkedCps(issue))}`,
+        issue,
+        reason: "client_unresponsive",
+        referenceKey: openLinkedCps(issue)[0]?.key,
+      },
+      kind: "candidate",
+    };
+  }
+
   return { issue, kind: "needs-similarity" };
 }
 
@@ -308,7 +354,7 @@ export async function getClosureCandidates(): Promise<ClosureCandidate[]> {
   }
 
   const issues = await getAllOpenTsIssues();
-  const classifications = await mapWithConcurrency(issues, 8, classifyIssue);
+  const classifications = await mapWithConcurrency(issues, 8, (issue) => classifyIssue(issue));
 
   const candidates: ClosureCandidate[] = [];
   const needsSimilarityCheck: FormattedIssue[] = [];

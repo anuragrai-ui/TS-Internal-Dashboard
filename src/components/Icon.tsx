@@ -1,6 +1,7 @@
 export type IconName =
   | "alert"
   | "bot"
+  | "chart"
   | "check-circle"
   | "chevron-down"
   | "chevron-left"
@@ -43,6 +44,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <circle cx="12" cy="3" r="1" />
       <path d="M9 13v1M15 13v1" />
       <path d="M2 14h2M20 14h2" />
+    </>
+  ),
+  chart: (
+    <>
+      <path d="M3 3v18h18" />
+      <path d="M7 16v-4M12 16V8M17 16v-7" />
     </>
   ),
   "check-circle": (

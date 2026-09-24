@@ -5,7 +5,8 @@ import { extractLatestMentionFromComments } from "@/lib/jiraClient";
 import type { FormattedIssue } from "@/lib/jiraClient";
 import { determineCpCandidate, resolveCpMentionTarget } from "@/lib/cpEscalation";
 import type { CpMentionTarget } from "@/lib/cpEscalation";
-import { determineProductWaitCandidate, draftProductWaitMessage } from "@/lib/productWaitFollowup";
+import { determineProductWaitCandidate as determineProductWaitCandidateImpl, draftProductWaitMessage } from "@/lib/productWaitFollowup";
+import type { ReplyTracking } from "@/lib/replyTracking";
 import { VALID_KINDS } from "../app/api/tickets/[key]/followup/send/route";
 
 function assertEqual<T>(actual: T, expected: T, label: string): void {
@@ -425,6 +426,44 @@ function makeTsIssue(overrides: Partial<FormattedIssue> = {}): FormattedIssue {
   });
 }
 
+/* Defaults to "comment history unavailable" so the audit-log fallback path
+   is what's exercised unless a test passes real tracking. */
+function determineProductWaitCandidate(
+  issue: FormattedIssue,
+  getAuditEntries: (issueKey: string) => Promise<FollowUpAuditEntry[]>,
+  tracking: ReplyTracking | null = null,
+): ReturnType<typeof determineProductWaitCandidateImpl> {
+  return determineProductWaitCandidateImpl(issue, getAuditEntries, () => Promise.resolve(tracking));
+}
+
+async function testProductWaitOrdinalFromJiraComments(): Promise<void> {
+  console.log("\n--- Test: product-wait ordinal + days come from Jira comments, not just the dashboard's audit log ---");
+
+  const fromComments = await determineProductWaitCandidate(makeTsIssue(), mockAuditEntries([]), {
+    daysSinceLastFollowUp: 5,
+    daysSinceReporterReply: 12,
+    lastFollowUpAt: daysAgoIso(5),
+    lastReporterReplyAt: daysAgoIso(12),
+    unansweredFollowUps: 2,
+  });
+  assert(fromComments !== null, "5 days since the last follow-up should be due");
+  assertEqual(fromComments?.followUpOrdinal, 3, "2 follow-ups posted directly in Jira (none via dashboard) -> next is the 3rd");
+  assertEqual(fromComments?.unansweredFollowUps, 2, "should carry the unanswered count through");
+  assertEqual(Math.round(fromComments?.daysSinceLastFollowUp ?? 0), 5, "days since last follow-up should come from the comment");
+  assertEqual(Math.round(fromComments?.daysSinceReporterReply ?? 0), 12, "days since reporter reply should come through");
+
+  const reporterJustReplied = await determineProductWaitCandidate(makeTsIssue({ updated: daysAgoIso(30) }), mockAuditEntries([]), {
+    daysSinceLastFollowUp: 10,
+    daysSinceReporterReply: 1,
+    lastFollowUpAt: daysAgoIso(10),
+    lastReporterReplyAt: daysAgoIso(1),
+    unansweredFollowUps: 0,
+  });
+  assertEqual(reporterJustReplied, null, "reporter replied a day ago - not due yet, cadence runs from the latest exchange");
+
+  console.log("PASS: ordinal and days reflect every follow-up on the ticket, including ones posted directly in Jira.");
+}
+
 async function testProductWaitCadenceAndOrdinal(): Promise<void> {
   console.log("\n--- Test: TS product-wait cadence is 3 days, and ordinal counts prior product_wait entries ---");
 
@@ -581,6 +620,7 @@ async function main(): Promise<void> {
     await testCpPodWithNoPmManagerSkipsThirdTag();
     await testCpAssigneeStillTakesPriorityOverPod();
     await testProductWaitCadenceAndOrdinal();
+    await testProductWaitOrdinalFromJiraComments();
     await testExternalFallbackVariesByOrdinal();
     await testExternalDraftRejectsLeakAndFallsBackSafely();
     await testAuditLogTrimAndExpire();

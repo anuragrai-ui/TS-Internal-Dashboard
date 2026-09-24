@@ -10,35 +10,69 @@ import {
 import type { DraftResult } from "@/lib/followupDraft";
 import { getIssueByKey, getWaitingForProductTsOnly, mapWithConcurrency } from "@/lib/jiraClient";
 import type { FormattedIssue, TicketCommentContext } from "@/lib/jiraClient";
+import { getReplyTracking } from "@/lib/replyTracking";
+import type { ReplyTracking } from "@/lib/replyTracking";
 import { HUMAN_VARIETY_INSTRUCTION, pickVariant } from "@/lib/textVariety";
 
 const CADENCE_DAYS = 3;
 
 export interface ProductWaitCandidate {
+  /* Days since our last comment to the reporter, and since the reporter
+     last said anything - null when there's no such comment. Optional so a
+     candidate list cached before these existed still renders. */
+  daysSinceLastFollowUp?: number | null;
+  daysSinceReporterReply?: number | null;
   /* 1st, 2nd, 3rd... follow-up for this specific ticket - drives the
      external-branch anti-repetition instruction below. */
   followUpOrdinal: number;
   issue: FormattedIssue;
+  /* Our comments since the reporter last replied. */
+  unansweredFollowUps?: number;
 }
 
-/* Injectable getAuditEntries (defaulting to the real Redis-backed one)
-   mirrors determineCandidate() in slaFollowup.ts / classifyIssue() in
-   closureCandidates.ts - lets the cadence/ordinal math be unit-tested with
-   constructed fixtures instead of needing real Redis. */
+function latestIso(...dates: Array<string | undefined>): string | undefined {
+  return dates
+    .filter((date): date is string => Boolean(date) && !Number.isNaN(Date.parse(date!)))
+    .sort((a, b) => Date.parse(b) - Date.parse(a))[0];
+}
+
+/* Injectable getAuditEntries/getTracking (defaulting to the real Redis- and
+   Jira-backed ones) mirror determineCandidate() in slaFollowup.ts /
+   classifyIssue() in closureCandidates.ts - lets the cadence/ordinal math be
+   unit-tested with constructed fixtures instead of needing real services.
+
+   The ordinal comes from the ticket's real Jira comments (see
+   replyTracking.ts), not just the dashboard's own audit log - the log alone
+   missed every follow-up posted directly in Jira, so this always read 1. The
+   audit count is only the fallback when the comment history can't be read. */
 export async function determineProductWaitCandidate(
   issue: FormattedIssue,
   getAuditEntries: (issueKey: string) => Promise<FollowUpAuditEntry[]> = getFollowUpAuditEntries,
+  getTracking: (issue: FormattedIssue) => Promise<ReplyTracking | null> = getReplyTracking,
 ): Promise<ProductWaitCandidate | null> {
-  const auditEntries = await getAuditEntries(issue.key);
-  const priorCount = auditEntries.filter((entry) => entry.kind === "product_wait").length;
-  const lastFollowUp = mostRecentEntryOfKind(auditEntries, ["product_wait"]);
-  const daysSinceLast = lastFollowUp ? daysSince(lastFollowUp.posted_at) : daysSince(issue.updated);
+  const [auditEntries, tracking] = await Promise.all([getAuditEntries(issue.key), getTracking(issue)]);
+  const auditCount = auditEntries.filter((entry) => entry.kind === "product_wait").length;
+  const lastAuditFollowUp = mostRecentEntryOfKind(auditEntries, ["product_wait"]);
 
-  if (daysSinceLast < CADENCE_DAYS) {
+  // Cadence runs from the latest real exchange either way - our last nudge
+  // or the reporter's last reply, whichever is newer.
+  const lastActivity =
+    latestIso(lastAuditFollowUp?.posted_at, tracking?.lastFollowUpAt, tracking?.lastReporterReplyAt) ?? issue.updated;
+
+  if (daysSince(lastActivity) < CADENCE_DAYS) {
     return null;
   }
 
-  return { followUpOrdinal: priorCount + 1, issue };
+  const unansweredFollowUps = tracking ? tracking.unansweredFollowUps : auditCount;
+  const lastFollowUpAt = latestIso(lastAuditFollowUp?.posted_at, tracking?.lastFollowUpAt);
+
+  return {
+    daysSinceLastFollowUp: lastFollowUpAt ? daysSince(lastFollowUpAt) : null,
+    daysSinceReporterReply: tracking?.daysSinceReporterReply ?? null,
+    followUpOrdinal: unansweredFollowUps + 1,
+    issue,
+    unansweredFollowUps,
+  };
 }
 
 /**

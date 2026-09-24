@@ -379,8 +379,11 @@ function buildClosureUserPrompt(
   /* referenceKey is a real Jira key (a CP ticket or a similar TS ticket) and
      explanation is model-generated free text from the similarity judgment
      that can itself mention a key - never include either for an external
-     reporter, and a retry has no reference of its own to give. */
-  const includeReference = !external && reason !== "retry_close";
+     reporter, and a retry has no reference of its own to give. For
+     client_unresponsive the explanation/reference is a note for whoever
+     reviews the candidate (e.g. "linked CP-X still open, check first"), not
+     something to repeat to the reporter. */
+  const includeReference = !external && reason !== "retry_close" && reason !== "client_unresponsive";
 
   const ticketContext = {
     attachment_text: ocrText || undefined,

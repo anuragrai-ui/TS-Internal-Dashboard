@@ -128,6 +128,10 @@ export default async function DashboardPage(): Promise<React.ReactElement> {
           </div>
         </div>
         <div className="page-actions">
+          <Link className="btn" href="/weekly-closures">
+            <Icon name="chart" size={14} />
+            Weekly closures
+          </Link>
           {source === "Google Sheet" ? (
             <>
               <Link className="btn" href="/backlog">

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCachedCpCandidates, getCachedTsCandidates } from "@/lib/agentFollowupCache";
 import { CpEscalationAction } from "@/components/CpEscalationAction";
 import { getCpEscalationCandidates } from "@/lib/cpEscalation";
+import { UNRESPONSIVE_MIN_DAYS, UNRESPONSIVE_MIN_FOLLOW_UPS } from "@/lib/closureCandidates";
 import { getCurrentIdentity } from "@/lib/currentIdentity";
 import { getProductWaitCandidates } from "@/lib/productWaitFollowup";
 import { Icon } from "@/components/Icon";
@@ -11,6 +12,7 @@ import { KpiStrip } from "@/components/KpiStrip";
 import { ProductWaitFollowUpAction } from "@/components/ProductWaitFollowUpAction";
 
 import type { KpiItem } from "@/components/KpiStrip";
+import type { ProductWaitCandidate } from "@/lib/productWaitFollowup";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,25 @@ function mentionSourceLabel(source: string): string {
     return "POD EM + PM + PM Manager";
   }
   return "unconfirmed guess";
+}
+
+function formatDaysAgo(days: number | null | undefined): string {
+  if (days === null || days === undefined) {
+    return "—";
+  }
+  if (days < 1) {
+    return "today";
+  }
+  return `${Math.floor(days)}d ago`;
+}
+
+/* Same rule the Closure Candidates tab uses for "client_unresponsive" -
+   imported rather than restated so the two tabs can't drift apart. */
+function isReadyToClose(candidate: ProductWaitCandidate): boolean {
+  return (
+    (candidate.unansweredFollowUps ?? 0) >= UNRESPONSIVE_MIN_FOLLOW_UPS &&
+    (candidate.daysSinceLastFollowUp ?? 0) >= UNRESPONSIVE_MIN_DAYS
+  );
 }
 
 export default async function AgentFollowUpsPage(): Promise<React.ReactElement> {
@@ -69,11 +90,18 @@ export default async function AgentFollowUpsPage(): Promise<React.ReactElement> 
 
   const externalCount = tsCandidates.filter((candidate) => candidate.issue.reporter_is_external).length;
   const repeatFollowUpCount = tsCandidates.filter((candidate) => candidate.followUpOrdinal > 1).length;
+  const readyToCloseCount = tsCandidates.filter(isReadyToClose).length;
 
   const tsKpis: KpiItem[] = [
     { label: "TS Follow-Ups Due", value: tsCandidates.length },
     { label: "External Reporter", value: externalCount },
     { label: "Repeat Follow-Up (2nd+)", tone: repeatFollowUpCount > 0 ? "warning" : undefined, value: repeatFollowUpCount },
+    {
+      label: "No Reply, Ready to Close",
+      sub: `${UNRESPONSIVE_MIN_FOLLOW_UPS}+ follow-ups, ${UNRESPONSIVE_MIN_DAYS}+ days quiet`,
+      tone: readyToCloseCount > 0 ? "warning" : undefined,
+      value: readyToCloseCount,
+    },
   ];
 
   return (
@@ -187,6 +215,9 @@ export default async function AgentFollowUpsPage(): Promise<React.ReactElement> 
         </h2>
         <p className="page-subtitle">
           TS tickets "Waiting for Product" for 3+ days since the last follow-up (or ever, for a first one).
+          Follow-up counts and days come from the ticket's own Jira comments, so replies posted directly in
+          Jira count too. After {UNRESPONSIVE_MIN_FOLLOW_UPS} unanswered follow-ups and {UNRESPONSIVE_MIN_DAYS}+
+          quiet days, a ticket also shows up in <Link href="/closure-candidates">Closure Candidates</Link>.
         </p>
       </div>
 
@@ -208,6 +239,8 @@ export default async function AgentFollowUpsPage(): Promise<React.ReactElement> 
                 <th scope="col">Status</th>
                 <th scope="col">Linked CP</th>
                 <th scope="col">Follow-Up #</th>
+                <th scope="col">Last Follow-Up</th>
+                <th scope="col">Reporter Replied</th>
                 <th scope="col">Action</th>
               </tr>
             </thead>
@@ -238,7 +271,29 @@ export default async function AgentFollowUpsPage(): Promise<React.ReactElement> 
                       <span className="cell-muted">—</span>
                     )}
                   </td>
-                  <td className="cell-muted">{candidate.followUpOrdinal}</td>
+                  <td>
+                    <div className="cell-with-sub">
+                      <span>{candidate.followUpOrdinal}</span>
+                      <span className="cell-sub">
+                        {candidate.unansweredFollowUps === undefined
+                          ? "—"
+                          : `${candidate.unansweredFollowUps} sent, no reply`}
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="cell-with-sub">
+                      <span>{formatDaysAgo(candidate.daysSinceLastFollowUp)}</span>
+                      {isReadyToClose(candidate) ? (
+                        <Link className="cell-sub" href="/closure-candidates" style={{ color: "var(--warning)", fontWeight: 600 }}>
+                          Ready to close
+                        </Link>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="cell-muted">
+                    {candidate.daysSinceReporterReply === null ? "Never" : formatDaysAgo(candidate.daysSinceReporterReply)}
+                  </td>
                   <td className="wrap-cell">
                     <ProductWaitFollowUpAction issueKey={candidate.issue.key} />
                   </td>

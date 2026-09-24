@@ -4,6 +4,8 @@ import { getCachedTsCandidates } from "@/lib/agentFollowupCache";
 import { getProductWaitCandidates } from "@/lib/productWaitFollowup";
 
 export interface ProductWaitListItem {
+  daysSinceLastFollowUp: number | null;
+  daysSinceReporterReply: number | null;
   followUpOrdinal: number;
   issue: {
     key: string;
@@ -15,12 +17,15 @@ export interface ProductWaitListItem {
     summary?: string;
     url: string;
   };
+  unansweredFollowUps?: number;
 }
 
 export async function GET(): Promise<NextResponse> {
   const candidates = (await getCachedTsCandidates()) ?? (await getProductWaitCandidates());
 
   const items: ProductWaitListItem[] = candidates.map((candidate) => ({
+    daysSinceLastFollowUp: candidate.daysSinceLastFollowUp ?? null,
+    daysSinceReporterReply: candidate.daysSinceReporterReply ?? null,
     followUpOrdinal: candidate.followUpOrdinal,
     issue: {
       key: candidate.issue.key,
@@ -32,6 +37,7 @@ export async function GET(): Promise<NextResponse> {
       summary: candidate.issue.summary,
       url: candidate.issue.url,
     },
+    unansweredFollowUps: candidate.unansweredFollowUps,
   }));
 
   return NextResponse.json({ items });

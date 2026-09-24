@@ -1,5 +1,6 @@
 import { determineCandidate } from "@/lib/slaFollowup";
-import { classifyIssue, parseSimilarityMatches } from "@/lib/closureCandidates";
+import { classifyIssue as classifyIssueImpl, parseSimilarityMatches } from "@/lib/closureCandidates";
+import type { ReplyTracking } from "@/lib/replyTracking";
 import type { FollowUpAuditEntry } from "@/lib/followupAudit";
 import type { FormattedIssue } from "@/lib/jiraClient";
 
@@ -60,6 +61,24 @@ function makeAuditEntry(overrides: Partial<FollowUpAuditEntry> = {}): FollowUpAu
 
 function mockAuditEntries(entries: FollowUpAuditEntry[]): (issueKey: string) => Promise<FollowUpAuditEntry[]> {
   return () => Promise.resolve(entries);
+}
+
+function mockTracking(tracking: ReplyTracking | null): () => Promise<ReplyTracking | null> {
+  return () => Promise.resolve(tracking);
+}
+
+function makeTracking(unansweredFollowUps: number, daysSinceLastFollowUp: number): ReplyTracking {
+  return { daysSinceLastFollowUp, daysSinceReporterReply: null, unansweredFollowUps };
+}
+
+/* Every existing classifyIssue test predates comment-based reply tracking -
+   default it to "comment history unavailable" so they never hit real Jira. */
+function classifyIssue(
+  issue: FormattedIssue,
+  getAuditEntries: (issueKey: string) => Promise<FollowUpAuditEntry[]>,
+  getTracking: () => Promise<ReplyTracking | null> = mockTracking(null),
+): ReturnType<typeof classifyIssueImpl> {
+  return classifyIssueImpl(issue, getAuditEntries, getTracking);
 }
 
 // --- determineCandidate (src/lib/slaFollowup.ts) ---
@@ -340,6 +359,65 @@ async function testNoSignalNeedsSimilarityCheck(): Promise<void> {
   console.log("PASS: a ticket with no free signal is queued for the similarity check rather than skipped or auto-flagged.");
 }
 
+async function testTwoUnansweredFollowUpsAndFourDaysIsUnresponsive(): Promise<void> {
+  console.log("\n--- Test: 2 unanswered follow-ups + 4 quiet days (from Jira comments) is client_unresponsive ---");
+
+  const issue = makeIssue({ status: "Waiting for Product" });
+  const result = await classifyIssue(issue, mockAuditEntries([]), mockTracking(makeTracking(2, 4.5)));
+
+  assert(
+    result.kind === "candidate" && result.candidate.reason === "client_unresponsive",
+    "2 follow-ups with no reply for 4+ days should be a client_unresponsive candidate, Waiting for Product included",
+  );
+  assert(
+    result.kind === "candidate" && result.candidate.explanation.includes("4 days") && result.candidate.explanation.includes("2 follow-ups"),
+    "the explanation should say how long and how many follow-ups",
+  );
+
+  console.log("PASS: comment-based silence after 2 follow-ups surfaces as a closure candidate.");
+}
+
+async function testUnresponsiveThresholdsBothRequired(): Promise<void> {
+  console.log("\n--- Test: fewer than 2 follow-ups, or under 4 days quiet, is NOT unresponsive ---");
+
+  const tooRecent = await classifyIssue(makeIssue(), mockAuditEntries([]), mockTracking(makeTracking(2, 3.9)));
+  assertEqual(tooRecent.kind, "needs-similarity", "2 follow-ups but only 3.9 days quiet should not qualify yet");
+
+  const onlyOne = await classifyIssue(makeIssue(), mockAuditEntries([]), mockTracking(makeTracking(1, 10)));
+  assertEqual(onlyOne.kind, "needs-similarity", "1 follow-up, however old, should not qualify");
+
+  const replied = await classifyIssue(makeIssue(), mockAuditEntries([]), mockTracking(makeTracking(0, 20)));
+  assertEqual(replied.kind, "needs-similarity", "reporter replied after our last follow-up - not unresponsive");
+
+  console.log("PASS: both thresholds must be met.");
+}
+
+async function testOpenLinkedCpIsNamedNotHidden(): Promise<void> {
+  console.log("\n--- Test: an open linked CP doesn't hide an unresponsive candidate, but is named in the explanation ---");
+
+  const result = await classifyIssue(
+    makeIssue({
+      linked_cp_issues: [{ isDone: false, issueType: "Story", key: "CP-8", status: "Backlog" }],
+      status: "Waiting for Product",
+    }),
+    mockAuditEntries([]),
+    mockTracking(makeTracking(2, 6)),
+  );
+
+  assert(
+    result.kind === "candidate" && result.candidate.reason === "client_unresponsive",
+    "still surfaced - nearly every Waiting for Product ticket has an open CP",
+  );
+  assert(
+    result.kind === "candidate" &&
+      result.candidate.explanation.includes("CP-8 (Backlog)") &&
+      result.candidate.referenceKey === "CP-8",
+    "the open CP should be named so whoever closes it can double-check",
+  );
+
+  console.log("PASS: open linked CP is flagged in the explanation rather than silently hiding the candidate.");
+}
+
 // --- parseSimilarityMatches (src/lib/closureCandidates.ts) ---
 
 function testParsesGenuineMatches(): void {
@@ -400,6 +478,9 @@ async function main(): Promise<void> {
     await testStoryTypeCpIsIgnoredForClosure();
     await testAllStoryTypeCpsGiveNoSignal();
     await testNoSignalNeedsSimilarityCheck();
+    await testTwoUnansweredFollowUpsAndFourDaysIsUnresponsive();
+    await testUnresponsiveThresholdsBothRequired();
+    await testOpenLinkedCpIsNamedNotHidden();
     testParsesGenuineMatches();
     testIgnoresMalformedEntries();
     testEmptyOrUnparseableInput();

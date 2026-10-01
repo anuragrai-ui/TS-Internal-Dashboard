@@ -6,11 +6,17 @@ import { enqueueOcrForIssues } from "@/lib/attachmentOcr";
 import { canMentionReporter } from "@/lib/followupDraft";
 import { getTicketCommentContext } from "@/lib/jiraClient";
 import { draftProductWaitMessage, getProductWaitCandidates } from "@/lib/productWaitFollowup";
+import { requireIdentity } from "@/lib/currentIdentity";
 
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<NextResponse> {
+  const auth = await requireIdentity();
+  if (auth.response) {
+    return auth.response;
+  }
+
   const { key } = await params;
 
   const candidates = await getProductWaitCandidates();

@@ -4,11 +4,17 @@ import { after } from "next/server";
 import { enqueueOcrForIssues } from "@/lib/attachmentOcr";
 import { draftFollowUpMessage } from "@/lib/followupDraft";
 import { getIssueByKey, getTicketCommentContext } from "@/lib/jiraClient";
+import { requireIdentity } from "@/lib/currentIdentity";
 
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<NextResponse> {
+  const auth = await requireIdentity();
+  if (auth.response) {
+    return auth.response;
+  }
+
   const { key } = await params;
   const issue = await getIssueByKey(key);
 

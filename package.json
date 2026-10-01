@@ -14,6 +14,7 @@
     "test:closure-logic": "npx tsx scripts/test-closure-logic.ts",
     "test:escalation": "npx tsx scripts/test-escalation.ts",
     "test:google-sheet": "node --experimental-strip-types scripts/test-google-sheet-backlog.mjs",
+    "test:identity-session": "npx tsx scripts/test-identity-session.ts",
     "test:jira-comment-adf": "npx tsx scripts/test-jira-comment-adf.ts",
     "test:google-sheets-writer": "npx tsx scripts/test-google-sheets-writer.ts",
     "test:llm-client": "npx tsx scripts/test-llm-client.ts",

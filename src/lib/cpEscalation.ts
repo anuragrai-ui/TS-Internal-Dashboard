@@ -187,6 +187,9 @@ export async function getCpEscalationCandidates(): Promise<CpEscalationCandidate
   for (const [, issues] of categoryResults) {
     for (const issue of issues) {
       const linkedCp = issue.linked_cp_issue;
+      // isDone, not isFixShipped: a CP in Ready for Release is finished
+      // engineering work waiting on a release, so there's nothing to nudge
+      // its owners about - even though the TS ticket stays open until it ships.
       if (issue.project === "TS" && linkedCp && !linkedCp.isDone) {
         cpToLinkedTs.set(linkedCp.key, { assigneeAccountId: issue.assignee_account_id, key: issue.key });
       }

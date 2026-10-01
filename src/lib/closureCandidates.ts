@@ -2,7 +2,7 @@ import { getFollowUpAuditEntries } from "@/lib/followupAudit";
 import type { FollowUpAuditEntry } from "@/lib/followupAudit";
 import { CATEGORIES, getCategoryIssues, mapWithConcurrency, searchIssuesSummary } from "@/lib/jiraClient";
 import type { FormattedIssue, IssueSummary } from "@/lib/jiraClient";
-import { hasOpenLinkedCp } from "@/lib/linkedCp";
+import { hasOpenLinkedCp, isFixShipped } from "@/lib/linkedCp";
 import { callChatCompletionChain, getApiKey, getModelChain, isEscalationEnabled } from "@/lib/llmClient";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
 import { getReplyTracking } from "@/lib/replyTracking";
@@ -35,7 +35,8 @@ function getSimilarityLimit(): number {
 export const UNRESPONSIVE_MIN_FOLLOW_UPS = 2;
 export const UNRESPONSIVE_MIN_DAYS = 4;
 
-const CACHE_KEY = "closure:candidates";
+/* v2: entries cached before isFixShipped (Ready for Release != resolved) must not be served. */
+const CACHE_KEY = "closure:candidates:v2";
 const CACHE_TTL_SECONDS = 1800;
 
 async function getAllOpenTsIssues(): Promise<FormattedIssue[]> {
@@ -253,7 +254,7 @@ export async function classifyIssue(
   // unresponsive / similarity checks below instead.
   const blockingCps = (issue.linked_cp_issues ?? []).filter((cp) => cp.issueType !== "Story");
 
-  if (blockingCps.length > 0 && blockingCps.every((cp) => cp.isDone)) {
+  if (blockingCps.length > 0 && blockingCps.every(isFixShipped)) {
     const [first] = blockingCps;
 
     return {

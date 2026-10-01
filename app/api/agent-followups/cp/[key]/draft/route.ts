@@ -3,11 +3,17 @@ import { NextResponse } from "next/server";
 import { getCachedDraft } from "@/lib/agentFollowupCache";
 import { draftCpEscalationMessage, getCpEscalationCandidates } from "@/lib/cpEscalation";
 import { getIssueByKey, getTicketCommentContext } from "@/lib/jiraClient";
+import { requireIdentity } from "@/lib/currentIdentity";
 
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<NextResponse> {
+  const auth = await requireIdentity();
+  if (auth.response) {
+    return auth.response;
+  }
+
   const { key } = await params;
 
   const cached = await getCachedDraft(key, "cp_escalation");

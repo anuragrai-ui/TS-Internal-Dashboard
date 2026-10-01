@@ -145,7 +145,7 @@ export function JiraTokenSettings({ currentIdentity, users }: JiraTokenSettingsP
         {successMessage ? <span className="followup-status followup-status-success">{successMessage}</span> : null}
       </form>
 
-      {users.length === 0 ? (
+      {!currentIdentity ? null : users.length === 0 ? (
         <div className="empty-state">No team members have registered a personal Jira token yet.</div>
       ) : (
         <div className="table-scroll">
@@ -168,7 +168,7 @@ export function JiraTokenSettings({ currentIdentity, users }: JiraTokenSettingsP
                       {user.displayName}
                       {isCurrent ? <span className="cell-sub"> (you)</span> : null}
                     </td>
-                    <td className="cell-muted">{user.email}</td>
+                    <td className="cell-muted">{user.email || "—"}</td>
                     <td className="cell-muted">{new Date(user.registeredAt).toLocaleDateString()}</td>
                     <td>
                       {isCurrent ? (

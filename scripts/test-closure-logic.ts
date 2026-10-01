@@ -417,6 +417,38 @@ async function testOpenLinkedCpBlocksEveryClosingPath(): Promise<void> {
   console.log("PASS: nothing suggests closing a ticket with an open linked CP.");
 }
 
+async function testReadyForReleaseIsNotResolved(): Promise<void> {
+  console.log("\n--- Test: a CP in Ready for Release (Jira 'done' category) still blocks closing - the fix hasn't shipped ---");
+
+  const readyForRelease = { isDone: true, issueType: "Bug", key: "CP-11", status: "Ready for Release", statusId: "10131" };
+
+  const blocked = await classifyIssue(makeIssue({ linked_cp_issues: [readyForRelease] }), mockAuditEntries([]), mockTracking(makeTracking(3, 9)));
+  assertEqual(blocked.kind, "skip", "Ready for Release is not resolved - no linked_cp_resolved, no unresponsive close");
+
+  const byNameOnly = await classifyIssue(
+    makeIssue({ linked_cp_issues: [{ ...readyForRelease, statusId: undefined }] }),
+    mockAuditEntries([]),
+  );
+  assertEqual(byNameOnly.kind, "skip", "older cached issues without a statusId are caught by the status name");
+
+  const released = await classifyIssue(
+    makeIssue({ linked_cp_issues: [{ ...readyForRelease, status: "Released", statusId: "10571" }] }),
+    mockAuditEntries([]),
+  );
+  assert(
+    released.kind === "candidate" && released.candidate.reason === "linked_cp_resolved",
+    "once Released, it's a linked_cp_resolved candidate as before",
+  );
+
+  const slaWhileReady = await determineCandidate(
+    makeIssue({ linked_cp_issue: readyForRelease, linked_cp_issues: [readyForRelease] }),
+    mockAuditEntries([makeAuditEntry({ kind: "sla_stage_1", posted_at: daysAgoIso(4) })]),
+  );
+  assertEqual(slaWhileReady?.stage, 1, "the SLA cadence also stays on a check-in, never the 'it's fixed, closing' stage 2");
+
+  console.log("PASS: Ready for Release keeps the TS ticket open everywhere until the fix actually ships.");
+}
+
 async function testClientUnresponsiveAfterCpResolved(): Promise<void> {
   console.log("\n--- Test: no CP at all, or every CP resolved + client quiet -> closable ---");
 
@@ -538,6 +570,7 @@ async function main(): Promise<void> {
     await testTwoUnansweredFollowUpsAndFourDaysIsUnresponsive();
     await testUnresponsiveThresholdsBothRequired();
     await testOpenLinkedCpBlocksEveryClosingPath();
+    await testReadyForReleaseIsNotResolved();
     await testClientUnresponsiveAfterCpResolved();
     await testSlaNeverClosesWhileCpOpen();
     testParsesGenuineMatches();

@@ -3,6 +3,7 @@ import { PriorityIndicator } from "@/components/PriorityIndicator";
 import { RiskBadge } from "@/components/RiskBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatAge, formatRelativeTime, formatShortDate } from "@/lib/issueRow";
+import { isFixShipped } from "@/lib/linkedCp";
 
 import type { IssueRow } from "@/lib/issueRow";
 
@@ -132,7 +133,7 @@ export function IssueTable({
                 <td className="cell-muted">{formatRelativeTime(issue.latest_comment_created || issue.updated)}</td>
                 <td>
                   {issue.linked_cp_issue ? (
-                    <span className={issue.linked_cp_issue.isDone ? "linked-chip resolved" : "linked-chip"}>
+                    <span className={isFixShipped(issue.linked_cp_issue) ? "linked-chip resolved" : "linked-chip"}>
                       {issue.linked_cp_issue.key}
                     </span>
                   ) : (

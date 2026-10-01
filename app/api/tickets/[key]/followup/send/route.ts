@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 import type { FollowUpAuditEntry, FollowUpKind } from "@/lib/followupAudit";
 import { followUpAuditLogKey, followUpCooldownKey, trimAndExpireAuditLog } from "@/lib/followupAudit";
-import { getCurrentIdentity } from "@/lib/currentIdentity";
+import { requireIdentity } from "@/lib/currentIdentity";
 import { addFollowUpComment, getIssueByKey, JiraRequestError, transitionIssueToDone } from "@/lib/jiraClient";
 import { describeOpenCps, hasOpenLinkedCp } from "@/lib/linkedCp";
 import type { JiraCredentials } from "@/lib/jiraClient";
@@ -77,6 +77,14 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<NextResponse> {
+  // Every send is a real write (a Jira comment, possibly a transition to
+  // Done) - only an identified teammate, posting as themselves.
+  const auth = await requireIdentity();
+  if (auth.response) {
+    return auth.response;
+  }
+  const { identity } = auth;
+
   const { key } = await params;
 
   let body: SendFollowUpRequestBody;
@@ -171,22 +179,13 @@ export async function POST(
     }
   }
 
-  // Prefer whoever is actually browsing (see src/lib/currentIdentity.ts) over
-  // the ticket's own assignee: the Operations tabs now only ever show a
-  // person their own tickets, so in practice these agree, but this makes
-  // "post as me" explicit rather than incidental, and it's the only option
-  // at all for tickets sourced from the Google Sheet (Sheet AI Follow-Ups,
-  // History), which never carry an assignee_account_id. A caller with no
-  // identity cookie (the cron job, or a direct/legacy call) falls back to
-  // the ticket's assignee exactly as before. Either way, if the registered
-  // token turns out to be missing/expired/revoked (401/403), this falls
-  // back further to the shared service account. Whichever credentials
-  // actually succeed also close the ticket below, so the same identity that
-  // posted the comment is the one that transitions it.
-  const identity = await getCurrentIdentity();
-  const personalCredentials = await getJiraCredentialsForAccount(
-    identity?.accountId ?? issue.assignee_account_id,
-  );
+  // Posts as whoever is browsing (see src/lib/currentIdentity.ts), with
+  // their own registered token. If that token turns out to be missing,
+  // expired, or revoked (401/403), this falls back to the shared service
+  // account. Whichever credentials actually succeed also close the ticket
+  // below, so the same identity that posted the comment is the one that
+  // transitions it.
+  const personalCredentials = await getJiraCredentialsForAccount(identity.accountId);
   let effectiveCredentials = personalCredentials ?? undefined;
   let usedFallbackAccount = false;
 
@@ -206,7 +205,7 @@ export async function POST(
         throw error;
       }
       console.warn(
-        `${identity?.displayName ?? issue.assignee}'s personal Jira token was rejected (status ${error.status}) for ${key}; falling back to the shared service account.`,
+        `${identity.displayName}'s personal Jira token was rejected (status ${error.status}) for ${key}; falling back to the shared service account.`,
       );
       usedFallbackAccount = true;
       effectiveCredentials = undefined;

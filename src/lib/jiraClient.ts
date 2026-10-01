@@ -20,6 +20,7 @@ interface JiraNamedField {
 }
 
 interface JiraStatus {
+  id?: string;
   name?: string;
   statusCategory?: { key?: string; name?: string } | null;
 }
@@ -114,6 +115,8 @@ export interface TicketCommentContext {
 
 export interface CurrentUser {
   account_id?: string;
+  /* "atlassian" = a licensed internal user; "customer" = a JSM portal customer; "app" = a bot/integration. */
+  account_type?: string;
   display_name?: string;
   email?: string;
 }
@@ -134,10 +137,14 @@ export interface OcrEligibleAttachment {
 }
 
 export interface LinkedCpIssue {
+  /* Jira's own status category - note "Ready for Release" counts as done
+     here even though nothing has shipped. Use isFixShipped() (linkedCp.ts)
+     to ask whether the fix has actually reached the customer. */
   isDone: boolean;
   issueType?: string;
   key: string;
   status: string;
+  statusId?: string;
 }
 
 export interface FormattedIssue {
@@ -334,6 +341,7 @@ export async function getCurrentUser(credentials?: JiraCredentials): Promise<Cur
 
   return {
     account_id: data.accountId,
+    account_type: data.accountType,
     display_name: data.displayName,
     email: data.emailAddress,
   };
@@ -938,6 +946,7 @@ function toLinkedCpIssue(linked: JiraLinkedIssue): LinkedCpIssue | undefined {
     issueType: linked.fields?.issuetype?.name,
     key: linked.key,
     status: status?.name ?? "Unknown",
+    statusId: status?.id,
   };
 }
 

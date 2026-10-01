@@ -1,30 +1,89 @@
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 
+import {
+  createIdentitySession,
+  LEGACY_IDENTITY_COOKIE,
+  resolveSessionIdentity,
+  revokeIdentitySession,
+  SESSION_COOKIE,
+  SESSION_TTL_SECONDS,
+} from "@/lib/identitySession";
 import { getRegisteredJiraUser } from "@/lib/userJiraTokens";
 
 import type { RegisteredJiraUser } from "@/lib/userJiraTokens";
 
 /**
  * The only "who is browsing" concept in this app - there is no real
- * login/session system. Registering a personal Jira token (see
+ * login/session system beyond this. Registering a personal Jira token (see
  * userJiraTokens.ts) proves you control that account, so the registration
- * response also sets this cookie; from then on this browser is treated as
- * that person everywhere identity matters (the header badge, which tickets
- * the Operations tabs show, and whose token a Send uses).
- */
-export const IDENTITY_COOKIE = "ts_identity_account_id";
-
-/**
- * Resolves the cookie against the live registry rather than trusting its
- * value alone, so a removed or re-registered account can't stay "identified"
- * with stale data - a cookie pointing at a since-removed account (or set
- * before Redis/encryption were configured) is treated the same as no cookie
- * at all: not identified.
+ * response starts a server-side session for it (src/lib/identitySession.ts)
+ * and sets its random id as a cookie; from then on this browser is treated
+ * as that person everywhere identity matters (the header badge, which
+ * tickets the Operations tabs show, and whose token a Send uses).
+ *
+ * The cookie is an unguessable session id, never the accountId itself - see
+ * identitySession.ts for why the old raw-accountId cookie was forgeable.
  */
 export async function getCurrentIdentity(): Promise<RegisteredJiraUser | null> {
   const store = await cookies();
-  const accountId = store.get(IDENTITY_COOKIE)?.value;
-  return getRegisteredJiraUser(accountId);
+
+  // Re-checked against the live registry every time, and the session must
+  // belong to the account's current registration - see
+  // resolveSessionIdentity for how removal and re-registration end every
+  // other browser's session, not just this one.
+  return resolveSessionIdentity(store.get(SESSION_COOKIE)?.value, getRegisteredJiraUser);
+}
+
+/**
+ * For route handlers that act on someone's behalf or reveal ticket data
+ * (sends, drafts, candidate lists): returns the identity, or a ready-made
+ * 401 response to return as-is. The pages already show these tabs only to
+ * an identified browser - this closes the same door on the API routes
+ * behind them, which used to accept anyone.
+ */
+export async function requireIdentity(): Promise<
+  { identity: RegisteredJiraUser; response?: undefined } | { identity?: undefined; response: NextResponse }
+> {
+  const identity = await getCurrentIdentity();
+
+  if (!identity) {
+    return {
+      response: NextResponse.json(
+        { error: "Identify yourself first: register your own Jira API token on the Jira Tokens page." },
+        { status: 401 },
+      ),
+    };
+  }
+
+  return { identity };
+}
+
+/** Starts a session for an account whose Jira token was just verified, and sets the cookie on `response`. */
+export async function startIdentitySession(response: NextResponse, user: RegisteredJiraUser): Promise<boolean> {
+  const sessionId = await createIdentitySession(user);
+
+  if (!sessionId) {
+    return false;
+  }
+
+  response.cookies.set(SESSION_COOKIE, sessionId, {
+    httpOnly: true,
+    maxAge: SESSION_TTL_SECONDS,
+    path: "/",
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+  response.cookies.delete(LEGACY_IDENTITY_COOKIE);
+  return true;
+}
+
+/** Revokes this browser's session server-side and clears its cookies (route handlers only). */
+export async function endIdentitySession(): Promise<void> {
+  const store = await cookies();
+  await revokeIdentitySession(store.get(SESSION_COOKIE)?.value);
+  store.delete(SESSION_COOKIE);
+  store.delete(LEGACY_IDENTITY_COOKIE);
 }
 
 /**

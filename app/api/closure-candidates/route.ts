@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getClosureCandidates } from "@/lib/closureCandidates";
+import { requireIdentity } from "@/lib/currentIdentity";
 import type { ClosureReason } from "@/lib/closureCandidates";
 
 export interface ClosureCandidateListItem {
@@ -18,6 +19,11 @@ export interface ClosureCandidateListItem {
 }
 
 export async function GET(): Promise<NextResponse> {
+  const auth = await requireIdentity();
+  if (auth.response) {
+    return auth.response;
+  }
+
   const candidates = await getClosureCandidates();
 
   const items: ClosureCandidateListItem[] = candidates.map((candidate) => ({

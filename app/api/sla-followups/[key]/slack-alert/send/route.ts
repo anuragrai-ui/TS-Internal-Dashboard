@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { slaBreachAlertCooldownKey } from "@/lib/followupAudit";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
 import { postSlackMessage } from "@/lib/slackApi";
+import { requireIdentity } from "@/lib/currentIdentity";
 
 interface SendSlackAlertRequestBody {
   channel?: unknown;
@@ -18,6 +19,11 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<NextResponse> {
+  const auth = await requireIdentity();
+  if (auth.response) {
+    return auth.response;
+  }
+
   const { key } = await params;
 
   let body: SendSlackAlertRequestBody;

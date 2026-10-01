@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getCachedTsCandidates } from "@/lib/agentFollowupCache";
 import { getProductWaitCandidates } from "@/lib/productWaitFollowup";
+import { requireIdentity } from "@/lib/currentIdentity";
 
 export interface ProductWaitListItem {
   daysSinceLastFollowUp: number | null;
@@ -21,6 +22,11 @@ export interface ProductWaitListItem {
 }
 
 export async function GET(): Promise<NextResponse> {
+  const auth = await requireIdentity();
+  if (auth.response) {
+    return auth.response;
+  }
+
   const candidates = (await getCachedTsCandidates()) ?? (await getProductWaitCandidates());
 
   const items: ProductWaitListItem[] = candidates.map((candidate) => ({

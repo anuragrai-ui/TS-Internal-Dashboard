@@ -196,7 +196,7 @@ async function testRegisterStoresEncryptedAndReturnsRealIdentity(): Promise<void
   await withMockEnv({ TOKEN_ENCRYPTION_KEY: TEST_KEY, ...REDIS_ENABLED_ENV }, async () => {
     const store = new FakeTokenStore();
     const verify = () =>
-      Promise.resolve({ account_id: "acc-123", display_name: "Aditi Sharma", email: "aditi@certifyos.com" });
+      Promise.resolve({ account_id: "acc-123", account_type: "atlassian", display_name: "Aditi Sharma", email: "aditi@certifyos.com" });
 
     const result = await registerUserJiraToken("aditi@certifyos.com", "real-token-value", verify, store);
 
@@ -213,12 +213,52 @@ async function testRegisterStoresEncryptedAndReturnsRealIdentity(): Promise<void
   });
 }
 
+async function testRegisterRejectsNonInternalAccounts(): Promise<void> {
+  console.log("\n--- Test: a JSM portal customer or bot account can't register (and so can't be identified as a teammate) ---");
+
+  await withMockEnv({ TOKEN_ENCRYPTION_KEY: TEST_KEY, ...REDIS_ENABLED_ENV }, async () => {
+    for (const accountType of ["customer", "app", undefined]) {
+      const store = new FakeTokenStore();
+      const result = await registerUserJiraToken(
+        "someone@client.example",
+        "valid-token",
+        () => Promise.resolve({ account_id: "acc-ext", account_type: accountType, display_name: "Client Person" }),
+        store,
+      );
+      assert(!result.ok, `accountType ${String(accountType)} must be rejected`);
+      assertEqual(await store.smembers("jira_user_tokens:accounts"), [], `nothing should be stored for accountType ${String(accountType)}`);
+    }
+  });
+
+  await withMockEnv({ TOKEN_ENCRYPTION_KEY: TEST_KEY, ...REDIS_ENABLED_ENV, ALLOWED_REGISTRATION_EMAIL_DOMAINS: undefined }, async () => {
+    const store = new FakeTokenStore();
+    const outsider = await registerUserJiraToken(
+      "client.person@gmail.com",
+      "valid-token",
+      () => Promise.resolve({ account_id: "acc-out", account_type: "atlassian", display_name: "Client Person" }),
+      store,
+    );
+    assert(!outsider.ok, "a full Atlassian account outside certifyos.com must still be rejected");
+    assertEqual(await store.smembers("jira_user_tokens:accounts"), [], "nothing stored for an outside domain");
+
+    const teammate = await registerUserJiraToken(
+      "Someone@CertifyOS.com",
+      "valid-token",
+      () => Promise.resolve({ account_id: "acc-in", account_type: "atlassian", display_name: "Someone" }),
+      store,
+    );
+    assert(teammate.ok, "a certifyos.com teammate registers (domain match is case-insensitive)");
+  });
+
+  console.log("PASS: only CertifyOS team members' internal Jira accounts can register.");
+}
+
 async function testGetCredentialsForAccountRoundTrips(): Promise<void> {
   console.log("\n--- Test: getJiraCredentialsForAccount returns the same email+token that was registered ---");
 
   await withMockEnv({ TOKEN_ENCRYPTION_KEY: TEST_KEY, ...REDIS_ENABLED_ENV }, async () => {
     const store = new FakeTokenStore();
-    const verify = () => Promise.resolve({ account_id: "acc-456", display_name: "Akshay", email: "akshay@certifyos.com" });
+    const verify = () => Promise.resolve({ account_id: "acc-456", account_type: "atlassian", display_name: "Akshay", email: "akshay@certifyos.com" });
     await registerUserJiraToken("akshay@certifyos.com", "akshay-token", verify, store);
 
     const credentials = await getJiraCredentialsForAccount("acc-456", store);
@@ -241,13 +281,13 @@ async function testListAndRemove(): Promise<void> {
     await registerUserJiraToken(
       "riona@certifyos.com",
       "riona-token",
-      () => Promise.resolve({ account_id: "acc-r", display_name: "Riona", email: "riona@certifyos.com" }),
+      () => Promise.resolve({ account_id: "acc-r", account_type: "atlassian", display_name: "Riona", email: "riona@certifyos.com" }),
       store,
     );
     await registerUserJiraToken(
       "jayaraj@certifyos.com",
       "jayaraj-token",
-      () => Promise.resolve({ account_id: "acc-j", display_name: "Jayaraj", email: "jayaraj@certifyos.com" }),
+      () => Promise.resolve({ account_id: "acc-j", account_type: "atlassian", display_name: "Jayaraj", email: "jayaraj@certifyos.com" }),
       store,
     );
 
@@ -277,7 +317,7 @@ async function testGracefulWithoutRedisOrEncryptionConfigured(): Promise<void> {
     { TOKEN_ENCRYPTION_KEY: undefined, UPSTASH_REDIS_REST_TOKEN: undefined, UPSTASH_REDIS_REST_URL: undefined },
     async () => {
       const result = await registerUserJiraToken("x@example.com", "token", () =>
-        Promise.resolve({ account_id: "acc-x" }),
+        Promise.resolve({ account_id: "acc-x", account_type: "atlassian" }),
       );
       assertEqual(result.ok, false, "registration should refuse cleanly, not throw, without Redis configured");
 
@@ -298,6 +338,7 @@ async function main(): Promise<void> {
     await testWrongLengthKeyIsRejected();
     await testRegisterValidatesAgainstJiraFirst();
     await testRegisterStoresEncryptedAndReturnsRealIdentity();
+    await testRegisterRejectsNonInternalAccounts();
     await testGetCredentialsForAccountRoundTrips();
     await testListAndRemove();
     await testGracefulWithoutRedisOrEncryptionConfigured();

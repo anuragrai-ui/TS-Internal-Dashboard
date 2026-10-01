@@ -11,6 +11,12 @@ export interface VerifySlackSignatureOptions {
 
 export function verifySlackSignature(opts: VerifySlackSignatureOptions): boolean {
   const { rawBody, signature, signingSecret, timestamp } = opts;
+
+  /* An empty secret is a misconfiguration, never a valid key - anyone can
+     compute an HMAC with "" and forge a request that would otherwise pass. */
+  if (!signingSecret) {
+    return false;
+  }
   const timestampSeconds = Number(timestamp);
   const nowSeconds = Math.floor(Date.now() / 1000);
 

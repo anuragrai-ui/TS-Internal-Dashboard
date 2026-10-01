@@ -2,7 +2,7 @@ import { daysSince, getFollowUpAuditEntries, mostRecentEntryOfKind } from "@/lib
 import type { FollowUpAuditEntry } from "@/lib/followupAudit";
 import { getCategoryIssues, getLinkedCpDetail, mapWithConcurrency } from "@/lib/jiraClient";
 import type { FormattedIssue } from "@/lib/jiraClient";
-import { hasOpenLinkedCp } from "@/lib/linkedCp";
+import { hasOpenLinkedCp, isFixShipped } from "@/lib/linkedCp";
 
 export type SlaFollowUpStage = 1 | 2 | 3;
 /* cp_not_worked: a linked CP is open and nobody's picked it up (Backlog /
@@ -113,7 +113,7 @@ export async function determineCandidate(
 
     return {
       daysSinceLastActivity: daysSince(lastCloseAttempt?.posted_at),
-      isResolved: issue.linked_cp_issue?.isDone ?? false,
+      isResolved: issue.linked_cp_issue ? isFixShipped(issue.linked_cp_issue) : false,
       issue,
       missedSla: false,
       reason: (await isCpNotWorkedOn(issue)) ? "cp_not_worked" : "no_reporter_response",
@@ -138,7 +138,7 @@ export async function determineCandidate(
 
     return {
       daysSinceLastActivity: daysSinceStage1,
-      isResolved: issue.linked_cp_issue?.isDone ?? false,
+      isResolved: issue.linked_cp_issue ? isFixShipped(issue.linked_cp_issue) : false,
       issue,
       missedSla: daysSinceStage1 >= SLA_DAYS + MISSED_SLA_BUFFER_DAYS,
       reason,

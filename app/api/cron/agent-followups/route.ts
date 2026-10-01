@@ -35,8 +35,11 @@ function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T | null> {
 
 export async function GET(request: Request): Promise<NextResponse> {
   const authHeader = request.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
 
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Fail closed: with CRON_SECRET unset, the old check compared against the
+  // literal string "Bearer undefined", which anyone could send.
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

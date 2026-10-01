@@ -8,11 +8,10 @@ import { decryptSecret, encryptSecret, isTokenEncryptionConfigured } from "@/lib
  * comment on their ticket posts under their own Jira identity instead of the
  * shared service account - see the "Per-Team-Member Jira Tokens" README
  * section. Registering also identifies this browser as that person (see
- * src/lib/currentIdentity.ts) - a lightweight, no-real-auth "who is
- * browsing" concept built entirely on top of this same registry. The send
- * route (app/api/tickets/[key]/followup/send/route.ts) prefers the browsing
- * identity's token when present, falling back to the ticket's own assignee
- * for any caller with no identity cookie (e.g. the cron job).
+ * src/lib/currentIdentity.ts) - a lightweight "who is browsing" concept
+ * built on top of this same registry plus a server-side session. The send
+ * route (app/api/tickets/[key]/followup/send/route.ts) requires an
+ * identified browser and posts with that person's own token.
  */
 export interface RegisteredJiraUser {
   accountId: string;
@@ -55,6 +54,19 @@ function resolveStore(): UserTokenStore {
   return getRedis();
 }
 
+/* Comma-separated, e.g. "certifyos.com,certifyos.io". Defaults to the one domain the team uses today. */
+function allowedRegistrationDomains(): string[] {
+  return (process.env.ALLOWED_REGISTRATION_EMAIL_DOMAINS || "certifyos.com")
+    .split(",")
+    .map((domain) => domain.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function isAllowedRegistrationEmail(email: string): boolean {
+  const domain = email.trim().toLowerCase().split("@")[1];
+  return Boolean(domain) && allowedRegistrationDomains().includes(domain!);
+}
+
 export type RegisterTokenResult =
   | { ok: true; user: RegisteredJiraUser }
   | { error: string; ok: false };
@@ -70,6 +82,7 @@ export async function registerUserJiraToken(
   apiToken: string,
   verifyCredentials: (credentials: JiraCredentials) => Promise<{
     account_id?: string;
+    account_type?: string;
     display_name?: string;
     email?: string;
   }> = getCurrentUser,
@@ -93,6 +106,16 @@ export async function registerUserJiraToken(
 
   if (!currentUser.account_id) {
     return { error: "Jira didn't return an account id for this token - cannot register it.", ok: false };
+  }
+
+  // Registering is what identifies a browser as a teammate, so only
+  // teammates may. A JSM portal customer ("customer") or a bot ("app") can
+  // hold a working API token for this site - and so can a client or
+  // Confluence-only user with a full Atlassian account ("atlassian"), so the
+  // account type alone isn't enough. The email domain is the real gate:
+  // Jira just accepted this email as the login for this exact token.
+  if (currentUser.account_type !== "atlassian" || !isAllowedRegistrationEmail(email)) {
+    return { error: "Only CertifyOS team members' Jira accounts can register here.", ok: false };
   }
 
   const record: StoredUserToken = {
@@ -138,7 +161,7 @@ export async function getJiraCredentialsForAccount(
   }
 }
 
-/** Single-account lookup backing src/lib/currentIdentity.ts - a browser's identity cookie only stores an accountId, so resolving "who is this" needs one record, not the whole list. */
+/** Single-account lookup backing src/lib/currentIdentity.ts - a session resolves to one accountId, so resolving "who is this" needs one record, not the whole list. */
 export async function getRegisteredJiraUser(
   accountId: string | undefined,
   store?: UserTokenStore,

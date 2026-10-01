@@ -1,22 +1,24 @@
 import { NextResponse } from "next/server";
 
-import { IDENTITY_COOKIE } from "@/lib/currentIdentity";
-import { listRegisteredJiraUsers, registerUserJiraToken } from "@/lib/userJiraTokens";
-
-/* One year: this cookie just remembers which registered account a browser
-   belongs to, not a security-sensitive session - re-registering or using the
-   "identify as" switcher (see app/api/settings/identity/route.ts) overwrites
-   it at any time. */
-const IDENTITY_COOKIE_MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
+import { getCurrentIdentity, startIdentitySession } from "@/lib/currentIdentity";
+import { registerUserJiraToken } from "@/lib/userJiraTokens";
 
 interface RegisterRequestBody {
   apiToken?: unknown;
   email?: unknown;
 }
 
+/* Only ever your own registration. This used to return every registered
+   teammate's accountId and email to anyone - and the accountId alone was
+   enough to impersonate them under the old cookie scheme. */
 export async function GET(): Promise<NextResponse> {
-  const users = await listRegisteredJiraUsers();
-  return NextResponse.json({ users });
+  const identity = await getCurrentIdentity();
+
+  if (!identity) {
+    return NextResponse.json({ error: "Not identified." }, { status: 401 });
+  }
+
+  return NextResponse.json({ user: identity });
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -41,16 +43,17 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: result.error }, { status: 422 });
   }
 
-  const response = NextResponse.json({ user: result.user });
   // Registering just proved control of this Jira account (verified against
-  // Jira's own /myself in registerUserJiraToken) - identify this browser as
-  // that person from now on, same as a fresh sign-in.
-  response.cookies.set(IDENTITY_COOKIE, result.user.accountId, {
-    httpOnly: true,
-    maxAge: IDENTITY_COOKIE_MAX_AGE_SECONDS,
-    path: "/",
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
+  // Jira's own /myself in registerUserJiraToken) - start a session for this
+  // browser, same as a fresh sign-in. See src/lib/identitySession.ts.
+  const response = NextResponse.json({ user: result.user });
+
+  if (!(await startIdentitySession(response, result.user))) {
+    return NextResponse.json(
+      { error: "Your token was saved, but a browser session couldn't be started (Redis unavailable). Try again." },
+      { status: 503 },
+    );
+  }
+
   return response;
 }

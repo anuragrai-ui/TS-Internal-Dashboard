@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getCachedCpCandidates } from "@/lib/agentFollowupCache";
 import { getCpEscalationCandidates } from "@/lib/cpEscalation";
+import { requireIdentity } from "@/lib/currentIdentity";
 
 export interface CpEscalationListItem {
   cp: {
@@ -21,6 +22,11 @@ export interface CpEscalationListItem {
 }
 
 export async function GET(): Promise<NextResponse> {
+  const auth = await requireIdentity();
+  if (auth.response) {
+    return auth.response;
+  }
+
   const candidates = (await getCachedCpCandidates()) ?? (await getCpEscalationCandidates());
 
   const items: CpEscalationListItem[] = candidates.map((candidate) => ({

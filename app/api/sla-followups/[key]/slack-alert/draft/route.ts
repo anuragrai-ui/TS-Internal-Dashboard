@@ -3,11 +3,17 @@ import { NextResponse } from "next/server";
 import { getIssueByKey } from "@/lib/jiraClient";
 import { buildSlaBreachAlert } from "@/lib/slaBreachAlert";
 import { determineCandidate } from "@/lib/slaFollowup";
+import { requireIdentity } from "@/lib/currentIdentity";
 
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<NextResponse> {
+  const auth = await requireIdentity();
+  if (auth.response) {
+    return auth.response;
+  }
+
   const { key } = await params;
 
   const issue = await getIssueByKey(key);

@@ -5,8 +5,9 @@ import { enqueueOcrForIssues } from "@/lib/attachmentOcr";
 import { canMentionReporter, draftSlaFollowUpMessage } from "@/lib/followupDraft";
 import { getIssueByKey, getTicketCommentContext } from "@/lib/jiraClient";
 import type { SlaFollowUpCandidate, SlaFollowUpStage } from "@/lib/slaFollowup";
-import { hasOpenLinkedCp } from "@/lib/linkedCp";
+import { hasOpenLinkedCp, isFixShipped } from "@/lib/linkedCp";
 import { isCpNotWorkedOn } from "@/lib/slaFollowup";
+import { requireIdentity } from "@/lib/currentIdentity";
 
 interface DraftSlaFollowUpRequestBody {
   stage?: unknown;
@@ -16,6 +17,11 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<NextResponse> {
+  const auth = await requireIdentity();
+  if (auth.response) {
+    return auth.response;
+  }
+
   const { key } = await params;
 
   let body: DraftSlaFollowUpRequestBody;
@@ -47,7 +53,7 @@ export async function POST(
   const cpNotWorked = await isCpNotWorkedOn(issue);
   const candidate: SlaFollowUpCandidate = {
     daysSinceLastActivity: 0,
-    isResolved: issue.linked_cp_issue?.isDone ?? false,
+    isResolved: issue.linked_cp_issue ? isFixShipped(issue.linked_cp_issue) : false,
     issue,
     missedSla: false,
     reason: cpNotWorked ? "cp_not_worked" : cpOpen ? "cp_in_progress" : "no_reporter_response",

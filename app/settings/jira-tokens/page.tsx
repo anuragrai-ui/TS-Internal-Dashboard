@@ -8,7 +8,15 @@ import { listRegisteredJiraUsers } from "@/lib/userJiraTokens";
 export const dynamic = "force-dynamic";
 
 export default async function JiraTokenSettingsPage(): Promise<React.ReactElement> {
-  const [users, currentIdentity] = await Promise.all([listRegisteredJiraUsers(), getCurrentIdentity()]);
+  const currentIdentity = await getCurrentIdentity();
+  // The page is reachable by anyone who can reach the site, so the teammate
+  // list (names, registration dates) is only shown to an already-identified
+  // teammate, and nobody else's email ever leaves the server.
+  const users = currentIdentity
+    ? (await listRegisteredJiraUsers()).map((user) =>
+        user.accountId === currentIdentity.accountId ? user : { ...user, email: "" },
+      )
+    : [];
 
   return (
     <>

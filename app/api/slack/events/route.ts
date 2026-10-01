@@ -71,6 +71,12 @@ async function recordMentions(event: SlackEvent): Promise<void> {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
+  // Fail closed: with no signing secret configured there's no way to tell a
+  // real Slack request from a forged one.
+  if (!process.env.SLACK_SIGNING_SECRET) {
+    return NextResponse.json({ error: "Slack events are not configured on this server." }, { status: 503 });
+  }
+
   const rawBody = await request.text();
   const signature = request.headers.get("x-slack-signature") ?? "";
   const timestamp = request.headers.get("x-slack-request-timestamp") ?? "";
@@ -78,7 +84,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const verified = verifySlackSignature({
     rawBody,
     signature,
-    signingSecret: process.env.SLACK_SIGNING_SECRET ?? "",
+    signingSecret: process.env.SLACK_SIGNING_SECRET,
     timestamp,
   });
 

@@ -29,7 +29,7 @@ const CLEAR_PREFIXES = [
   "agentfollowup:",
   "slack:mentions:",
 ];
-const CLEAR_EXACT_KEYS = ["closure:candidates"];
+const CLEAR_EXACT_KEYS = ["closure:candidates", "closure:candidates:v2"];
 const NEVER_TOUCH_PREFIX = "jira_user_tokens:";
 
 async function scanAllKeys(matchPattern: string): Promise<string[]> {

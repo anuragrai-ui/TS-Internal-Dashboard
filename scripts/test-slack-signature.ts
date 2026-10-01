@@ -38,6 +38,18 @@ function testValidSignature(): void {
   console.log("PASS: valid signature verifies.");
 }
 
+function testEmptySecretNeverVerifies(): void {
+  console.log("\n--- Test: an empty signing secret never verifies, even with a signature computed from it ---");
+
+  const timestamp = freshTimestamp();
+  const forged = computeSignature("", timestamp, RAW_BODY);
+
+  const result = verifySlackSignature({ rawBody: RAW_BODY, signature: forged, signingSecret: "", timestamp });
+
+  assert(result === false, "an unset secret must fail closed - anyone can compute an HMAC with an empty key");
+  console.log("PASS: empty secret is rejected.");
+}
+
 function testTamperedBody(): void {
   console.log("\n--- Test: tampered body fails verification ---");
 
@@ -117,6 +129,7 @@ function testMismatchedLengthDoesNotThrow(): void {
 function main(): void {
   try {
     testValidSignature();
+    testEmptySecretNeverVerifies();
     testTamperedBody();
     testTamperedSignature();
     testStaleTimestamp();

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCurrentIdentity } from "@/lib/currentIdentity";
 import { Icon } from "@/components/Icon";
 import { IdentityRequired } from "@/components/IdentityRequired";
+import { isFixShipped } from "@/lib/linkedCp";
 import { isEligibleForSlaBreachAlert } from "@/lib/slaBreachAlert";
 import { KpiStrip } from "@/components/KpiStrip";
 import { SlaBreachAlertAction } from "@/components/SlaBreachAlertAction";
@@ -122,7 +123,7 @@ export default async function SlaFollowUpsPage(): Promise<React.ReactElement> {
                     {candidate.issue.linked_cp_issue ? (
                       <span
                         className={
-                          candidate.isResolved || candidate.issue.linked_cp_issue.isDone
+                          candidate.isResolved || isFixShipped(candidate.issue.linked_cp_issue)
                             ? "linked-chip resolved"
                             : "linked-chip"
                         }

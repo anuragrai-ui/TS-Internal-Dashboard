@@ -1,7 +1,6 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { getCurrentIdentity, IDENTITY_COOKIE } from "@/lib/currentIdentity";
+import { endIdentitySession, getCurrentIdentity } from "@/lib/currentIdentity";
 import { removeUserJiraToken } from "@/lib/userJiraTokens";
 
 export async function DELETE(
@@ -11,13 +10,11 @@ export async function DELETE(
   const { accountId } = await params;
 
   // Self-service only: without this, anyone at the shared dashboard could
-  // remove a teammate's registration they have no ownership of (a griefing/
-  // denial vector - not impersonation, but still an unauthenticated write on
-  // someone else's identity). Being identified as `accountId` is itself
-  // proof of ownership, since that identity can only be reached by having
-  // that exact account's real Jira email+token pair verified against Jira's
-  // own /myself (see POST /api/settings/jira-tokens) - not by anything
-  // forgeable client-side.
+  // remove a teammate's registration they have no ownership of. Being
+  // identified as `accountId` is itself proof of ownership - that identity
+  // comes only from a server-issued session started right after Jira's own
+  // /myself verified this account's email + API token (see
+  // src/lib/identitySession.ts), not from anything settable client-side.
   const identity = await getCurrentIdentity();
 
   if (identity?.accountId !== accountId) {
@@ -27,10 +24,12 @@ export async function DELETE(
     );
   }
 
+  // Removing the token also ends every other browser's session for this
+  // account: getCurrentIdentity() re-checks the registry each time, and a
+  // later re-registration gets a new registeredAt that no older session
+  // matches (see resolveSessionIdentity in src/lib/identitySession.ts).
   await removeUserJiraToken(accountId);
-
-  const store = await cookies();
-  store.delete(IDENTITY_COOKIE);
+  await endIdentitySession();
 
   return NextResponse.json({ removed: true });
 }

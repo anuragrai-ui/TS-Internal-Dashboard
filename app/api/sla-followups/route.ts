@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSlaFollowUpCandidates } from "@/lib/slaFollowup";
+import { requireIdentity } from "@/lib/currentIdentity";
 import type { SlaFollowUpReason } from "@/lib/slaFollowup";
 
 export interface SlaFollowUpListItem {
@@ -22,6 +23,11 @@ export interface SlaFollowUpListItem {
 }
 
 export async function GET(): Promise<NextResponse> {
+  const auth = await requireIdentity();
+  if (auth.response) {
+    return auth.response;
+  }
+
   const candidates = await getSlaFollowUpCandidates();
 
   const items: SlaFollowUpListItem[] = candidates.map((candidate) => ({

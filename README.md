@@ -478,6 +478,29 @@ If `graphify` is not on your shell path, use the installed binary directly:
 /Users/anurag.rai/.local/bin/graphify cluster-only .
 ```
 
+## Engineering Escalation Pilot (dry-run phase)
+
+A Jira -> Slack escalation service for TS tickets waiting on engineering, piloting with the Credentialing pod. Design from the 2026-10-02 discovery: a poll-and-reconcile service inside this app, Postgres for state, Slack threads with an Acknowledge button, and **no Jira writes**. It goes dry run -> private shadow channel -> live. Only the pure logic and a read-only dry run exist so far: nothing posts to Slack, nothing is scheduled, and no database is attached.
+
+- **Trigger:** a Support Ticket (10844) in **Waiting for product** (10633) with a linked CP on any link type, in either direction. One escalation per CP, since many TS tickets share one CP. Routing uses the **CP's own Pod** (`customfield_10165`), never the TS ticket's Pod.
+- **Clock:** JSM Time to Resolution (`cf[10650]`) is paused in Waiting for product on every ticket. So the engineering ladder uses its own business-hours timer from the moment the ticket entered that status, on JSM calendar 30 (Mon-Fri 09:00-18:00 ET, holidays). The frozen TTR remaining only bumps priority. Timers for CPs already waiting at go-live start at go-live, with one backlog digest message.
+- **Outcomes:** Ready for Release is `fix_ready`: the ladder stops and the thread stays open. Released/Closed resolves after a grace period that absorbs the open-PR guard flipping Released -> Blocked. Rejections (Won't Do, Duplicate, HF-Rejected, ...) resolve without "fixed" wording. A ticket re-entering Waiting for product reopens the escalation as a new episode.
+- **Modules** (`src/lib/escalation/`): `types.ts` (contract), `policy.ts` (proposed thresholds, status/resolution ids, calendar 30, routing seed from `podRouting.ts`), `readOnlyJira.ts` (the only Jira access: GETs plus the two search POSTs; everything else throws before any request is made), `businessHours.ts`, `slaParser.ts`, `classify.ts` (qualifying rules and actionable/info exceptions), `plan.ts` + `messages.ts` (ladder levels, priority bumps, rate limits, quiet hours, Slack text with no ticket summaries or customer names), `stateMachine.ts` (fix_ready, resolve grace, hand-back, pod change, reopen episodes).
+- **Dry run:** `npm run escalation:dry-run` sweeps live Jira read-only and prints:
+  - which escalations would open, what the messages would say, and the exceptions
+  - how often CPs flip Released -> Blocked (to set the resolve grace)
+  - running-SLA readings
+
+  Pass `-- --readings-file=<path>` on separate runs (for example one in business hours and one in the evening) to compare Jira's SLA clock with ours. Pass `-- --json` for full output.
+- **Tests:** `npm run test:escalation-pilot`.
+- **Before shadow or live:**
+  - Vercel Pro on a company team (10-minute polling)
+  - Neon Postgres
+  - a Slack app with chat:write, channels:history, groups:history, channels:read, groups:read, users:read, users:read.email and interactivity
+  - verified Slack IDs for the Credentialing EM, PM and PM Manager
+  - a named L3 owner and support owner
+  - approval of the proposed thresholds in `policy.ts`
+
 ## Verification
 
 Run the full verification pipeline after any changes:

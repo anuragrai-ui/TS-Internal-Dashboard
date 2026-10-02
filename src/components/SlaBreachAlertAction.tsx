@@ -13,6 +13,7 @@ interface DraftResponseBody {
   error?: string;
   pmDisplayName?: string;
   podName?: string;
+  testModeChannel?: string | null;
   text?: string;
 }
 
@@ -29,6 +30,7 @@ export function SlaBreachAlertAction({ issueKey }: SlaBreachAlertActionProps): R
   const [channel, setChannel] = useState("");
   const [pmDisplayName, setPmDisplayName] = useState<string | undefined>(undefined);
   const [podName, setPodName] = useState<string | undefined>(undefined);
+  const [testModeChannel, setTestModeChannel] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
   const requestDraft = async (): Promise<void> => {
@@ -48,6 +50,7 @@ export function SlaBreachAlertAction({ issueKey }: SlaBreachAlertActionProps): R
       setChannel(body.channel);
       setPmDisplayName(body.pmDisplayName);
       setPodName(body.podName);
+      setTestModeChannel(body.testModeChannel ?? null);
       setStatus("drafted");
     } catch {
       setErrorMessage(DEFAULT_DRAFT_ERROR);
@@ -105,9 +108,16 @@ export function SlaBreachAlertAction({ issueKey }: SlaBreachAlertActionProps): R
 
     return (
       <div className="followup-panel">
-        <p className="followup-research-note">
-          Posting to {podName ?? "an unmapped POD's fallback"} channel{pmDisplayName ? `, tagging ${pmDisplayName}` : ""}.
-        </p>
+        {testModeChannel ? (
+          <p className="followup-research-note" style={{ color: "var(--warning)", fontWeight: 600 }}>
+            Test mode: this goes to the test channel ({testModeChannel}), not the {podName ?? "fallback"} channel, and
+            nobody is @-mentioned.
+          </p>
+        ) : (
+          <p className="followup-research-note">
+            Posting to {podName ?? "an unmapped POD's fallback"} channel{pmDisplayName ? `, tagging ${pmDisplayName}` : ""}.
+          </p>
+        )}
         <textarea
           className="followup-textarea"
           disabled={sending}

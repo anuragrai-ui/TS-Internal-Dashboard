@@ -1,5 +1,6 @@
 import { getCache, setCache } from "@/lib/cache";
 import { getSlackBotToken } from "@/lib/slackConnect";
+import { applySlackTestMode } from "@/lib/slackTestMode";
 
 const SLACK_POST_MESSAGE_URL = "https://slack.com/api/chat.postMessage";
 const SLACK_LOOKUP_BY_EMAIL_URL = "https://slack.com/api/users.lookupByEmail";
@@ -17,7 +18,9 @@ interface SlackPostMessageResponse {
  * escalation AI) - the cron route still runs and prepares drafts even
  * without Slack set up, it just skips the notification.
  */
-export async function postSlackMessage(channel: string, text: string): Promise<boolean> {
+export async function postSlackMessage(requestedChannel: string, requestedText: string): Promise<boolean> {
+  /* Test mode (SLACK_TEST_CHANNEL) redirects every post - see src/lib/slackTestMode.ts. */
+  const { channel, text } = applySlackTestMode(requestedChannel, requestedText);
   const token = await getSlackBotToken();
 
   if (!token) {

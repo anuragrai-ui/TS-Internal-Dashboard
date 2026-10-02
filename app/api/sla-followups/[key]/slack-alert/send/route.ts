@@ -4,6 +4,7 @@ import { slaBreachAlertCooldownKey } from "@/lib/followupAudit";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
 import { postSlackMessage } from "@/lib/slackApi";
 import { requireIdentity } from "@/lib/currentIdentity";
+import { getSlackTestChannel } from "@/lib/slackTestMode";
 
 interface SendSlackAlertRequestBody {
   channel?: unknown;
@@ -60,12 +61,13 @@ export async function POST(
 
   if (!posted) {
     return NextResponse.json(
-      { error: "Failed to post the Slack alert - check that SLACK_BOT_TOKEN is configured and can post to that channel." },
+      { error: "Failed to post the Slack alert - check the Slack connection (Settings) and that the bot can post to that channel." },
       { status: 502 },
     );
   }
 
-  if (isRedisConfigured()) {
+  /* A test-mode post went to the test channel, not the pod - it must not block the real alert for 24h. */
+  if (isRedisConfigured() && !getSlackTestChannel()) {
     try {
       await getRedis().set(slaBreachAlertCooldownKey(key), new Date().toISOString(), { ex: COOLDOWN_SECONDS });
     } catch (error) {
@@ -73,5 +75,5 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ sent: true });
+  return NextResponse.json({ sent: true, testModeChannel: getSlackTestChannel() });
 }

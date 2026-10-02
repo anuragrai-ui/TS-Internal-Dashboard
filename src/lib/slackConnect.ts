@@ -1,6 +1,7 @@
 import { getToken } from "@vercel/connect";
 
 import { FALLBACK_SLACK_CHANNEL, POD_ROUTING } from "@/lib/podRouting";
+import { getSlackTestChannel } from "@/lib/slackTestMode";
 
 /**
  * Slack credentials come from Vercel Connect: the team-level Slack connector
@@ -92,6 +93,10 @@ function routedChannels(): Map<string, string[]> {
   }
   if (!channels.has(FALLBACK_SLACK_CHANNEL)) {
     channels.set(FALLBACK_SLACK_CHANNEL, ["fallback"]);
+  }
+  const testChannel = getSlackTestChannel();
+  if (testChannel) {
+    channels.set(testChannel, [...(channels.get(testChannel) ?? []), "test mode (every post goes here)"]);
   }
   return channels;
 }

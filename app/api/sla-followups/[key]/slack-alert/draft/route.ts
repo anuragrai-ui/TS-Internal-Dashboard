@@ -4,6 +4,7 @@ import { getIssueByKey } from "@/lib/jiraClient";
 import { buildSlaBreachAlert } from "@/lib/slaBreachAlert";
 import { determineCandidate } from "@/lib/slaFollowup";
 import { requireIdentity } from "@/lib/currentIdentity";
+import { getSlackTestChannel } from "@/lib/slackTestMode";
 
 export async function POST(
   _request: Request,
@@ -45,6 +46,7 @@ export async function POST(
     channel: draft.channel,
     pmDisplayName: draft.pmDisplayName,
     podName: draft.podName,
+    testModeChannel: getSlackTestChannel(),
     text: draft.text,
   });
 }

@@ -24,6 +24,7 @@
     "test:sla-breach-alert": "npx tsx scripts/test-sla-breach-alert.ts",
     "test:slack": "npx tsx scripts/test-slack-signature.ts",
     "test:slack-request-auth": "npx tsx scripts/test-slack-request-auth.ts",
+    "test:slack-test-mode": "npx tsx scripts/test-slack-test-mode.ts",
     "test:theme": "npx tsx scripts/test-theme.ts",
     "test:user-jira-tokens": "npx tsx scripts/test-user-jira-tokens.ts",
     "typecheck": "next typegen && tsc --noEmit"

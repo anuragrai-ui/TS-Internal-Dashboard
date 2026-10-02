@@ -28,6 +28,12 @@ export function applySlackTestMode(
     return { channel, redirected: false, text };
   }
 
+  /* Already aimed at the test channel (Settings -> Slack's test button, the escalation shadow run):
+     nothing to redirect, but mentions stay defused. */
+  if (channel === testChannel) {
+    return { channel, redirected: false, text: neutralizeMentions(text) };
+  }
+
   return {
     channel: testChannel,
     redirected: true,

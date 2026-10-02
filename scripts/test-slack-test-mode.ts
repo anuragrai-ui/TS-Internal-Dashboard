@@ -28,6 +28,16 @@ function testOffWhenUnset(): void {
   console.log("PASS");
 }
 
+function testDirectTestChannelPost(): void {
+  console.log("\n--- Test: a post aimed at the test channel itself gets no banner but still never pings ---");
+  const result = applySlackTestMode("C0C65L7L23D", "Shadow <@U0ABC> <!here>", "C0C65L7L23D");
+  assertEqual(result.channel, "C0C65L7L23D", "stays in the test channel");
+  assert(!result.redirected, "not a redirect");
+  assert(!result.text.includes("would have posted"), "no redirect banner");
+  assert(!/<@|<!/.test(result.text), `mentions still defused: ${result.text}`);
+  console.log("PASS");
+}
+
 function testMentionsNeverPing(): void {
   console.log("\n--- Test: every kind of Slack mention is defused in test mode ---");
   const text = neutralizeMentions("cc <@U0ABC> <@U0DEF|saro> <!here> <!channel> <!everyone> <!subteam^S01|eng-leads> plain @name");
@@ -43,6 +53,7 @@ function testMentionsNeverPing(): void {
 try {
   testRedirectsEveryPost();
   testOffWhenUnset();
+  testDirectTestChannelPost();
   testMentionsNeverPing();
   console.log("\nAll Slack test-mode tests passed.");
   process.exit(0);

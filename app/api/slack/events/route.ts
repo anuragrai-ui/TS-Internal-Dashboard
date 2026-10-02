@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { truncateText } from "@/lib/jiraClient";
+import { notifyFromSlackEvent } from "@/lib/notifications/slack";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
 import { recordInboundSlackEvent } from "@/lib/slackInboundLog";
 import { authenticateSlackRequest } from "@/lib/slackRequestAuth";
@@ -12,11 +13,12 @@ const MAX_MENTIONS_PER_TICKET = 10;
 interface SlackEvent {
   bot_id?: string;
   channel?: string;
-  item?: { channel?: string; ts?: string };
+  item?: { channel?: string; ts?: string; type?: string };
   reaction?: string;
   user?: string;
   subtype?: string;
   text?: string;
+  thread_ts?: string;
   ts?: string;
   type?: string;
 }
@@ -131,6 +133,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     user: payload.event?.user ?? payload.user?.id,
     via: auth.via,
   });
+
+  /* Thread replies, reactions and ticket mentions -> the notification center (src/lib/notifications/slack.ts).
+     Runs after the response so Slack/Connect get their 200 at once and never retry for a slow Jira lookup. */
+  if (payload.type === "event_callback" && payload.event) {
+    const event = payload.event;
+    after(() => notifyFromSlackEvent(event));
+  }
 
   if (payload.type === "event_callback" && payload.event?.type === "message") {
     const event = payload.event;

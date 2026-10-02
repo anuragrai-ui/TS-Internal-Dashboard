@@ -369,6 +369,37 @@ function buildMessages(draft: Draft, policy: EscalationPolicy): PlannedMessage[]
   ];
 }
 
+/**
+ * One ladder level as a thread reply, for a thread that already exists. The
+ * shadow runner (runner.ts) uses this on later runs, where planEscalations'
+ * own messages don't fit: it only plans first sight, and a backlog
+ * escalation's first sight never carries a level. The dedupe key is left to
+ * the caller, which knows the episode.
+ */
+export function buildLevelMessage(
+  level: 1 | 2 | 3,
+  group: EscalationGroup,
+  planned: PlannedEscalation,
+  policy: EscalationPolicy,
+): Omit<PlannedMessage, "dedupeKey"> {
+  const mentions = levelMentions(level, group.routing);
+  const thresholds = policy.ladder[planned.effectivePriority];
+
+  return {
+    broadcast: level >= 2,
+    kind: `L${level}`,
+    mentions,
+    text: renderLevel(level, group, {
+      effectivePriority: planned.effectivePriority,
+      engineeringWaitBh: planned.engineeringWaitBh,
+      l3Configured: group.routing.owners.l3 !== undefined,
+      mentions,
+      nextLevel: planned.nextLevel,
+      thresholdBh: thresholdFor(level, thresholds),
+    }),
+  };
+}
+
 /* Each level re-tags everyone below it and adds one more owner. An unset
    L3 owner tags nobody extra - never a guessed substitute. */
 function levelMentions(level: 1 | 2 | 3, routing: RoutingRow): PersonRef[] {

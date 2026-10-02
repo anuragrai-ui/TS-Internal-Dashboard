@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { Icon } from "@/components/Icon";
+import { NotificationBell } from "@/components/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const CATEGORY_TITLES: Record<string, string> = {
@@ -18,7 +19,9 @@ const SECTION_TITLES: Record<string, string> = {
   "agent-followups": "Agent Follow-Ups",
   backlog: "Team Sheet Backlog",
   "closure-candidates": "Closure Candidates",
+  escalations: "Escalations",
   history: "History",
+  notifications: "Notifications",
   "sheet-followups": "Sheet AI Follow-Ups",
   "sla-followups": "SLA Follow-Ups",
   "weekly-closures": "Weekly Closures",
@@ -117,6 +120,8 @@ export function TopHeader({ jiraBaseUrl, onMenuClick, userDisplayName }: TopHead
       </div>
 
       <div className="header-actions">
+        {/* Notifications are per person, so the bell only exists once this browser is identified. */}
+        {userDisplayName ? <NotificationBell /> : null}
         <Link aria-label="Refresh Jira data" className="header-icon-btn" href="/refresh">
           <Icon name="refresh" />
         </Link>

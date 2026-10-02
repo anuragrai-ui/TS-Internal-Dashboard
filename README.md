@@ -189,6 +189,10 @@ npm run test:jira-comment-adf
 - `/api/sla-followups` - GET, lists tickets currently due for an SLA follow-up
 - `/api/sla-followups/[key]/draft` - POST, drafts a stage-aware SLA follow-up message
 - `/api/slack/events` - POST, Slack Events API webhook (signature-verified)
+- `/notifications` - the full notification feed behind the header bell (see [Notification Center](#notification-center))
+- `/api/notifications` - GET, the bell's poll (also kicks off the throttled Jira sync and escalation run); `/api/notifications/read` - POST, mark read
+- `/escalations` - the engineering-escalation shadow run: how it works, on/off, Run now, every tracked thread
+- `/api/escalations/config` - POST, start/pause the shadow run; `/api/escalations/run` - POST, run once now
 
 ## Project Structure
 
@@ -406,6 +410,28 @@ Setup (outside this codebase):
 
 Every request is signature-verified (HMAC-SHA256 over the raw body, using the timestamp + signing secret, rejecting anything older than 5 minutes) before any processing happens - see `src/lib/slackSignature.ts` and `npm run test:slack`. This requires the app to already be deployed at a public HTTPS URL; it cannot be exercised end-to-end locally.
 
+## Notification Center
+
+The bell in the header (and the **Notifications** page) is a personal feed of what changed on your tickets:
+
+- **Your TS tickets (Jira):** customer replies (important), teammates' comments and @-mentions, status moves, priority changes, being assigned a ticket, a CP getting linked. Jira automation's own comments, and its status move seconds after a customer reply, are skipped as noise.
+- **CPs your tickets wait on (Jira):** status moves (important once a fix is ready, shipped or rejected), engineering comments, a new CP assignee.
+- **Slack:** replies and reactions in threads the dashboard started (SLA-breach alerts, escalation threads, the Settings -> Slack test message), and messages mentioning a TS/CP key in channels the bot is in.
+- **Escalations:** new escalation threads, ladder levels, ✅ acknowledgements, fix ready and resolved.
+
+Notifications are per person. Only registered users (Jira Tokens page) get them, for the tickets assigned to them; the **Team** tab shows everyone's feed without unread state. Your own actions never notify you. TS sees ~700 ticket updates a day, so a team-wide unread count would just be noise.
+
+**Live:** every open dashboard polls `/api/notifications` every 30 seconds (2 minutes in a background tab); an unchanged feed costs one Redis read. New items pop up as toasts under the header, and **Turn on desktop alerts** in the bell adds browser notifications for a background tab.
+
+**Where it comes from:** Vercel Hobby cron runs once a day, so nothing is scheduled. Each poll offers to run the Jira sync after its response, at most once a minute across all browsers (Redis throttle). The sync reads, through the escalation pilot's read-only Jira client, TS tickets assigned to registered users and CPs updated since its cursor (2-minute overlap, at most 24 hours back), plus the newest comments of each changed issue. Slack events arrive through Vercel Connect (`/triggers/slack`) and are matched against `slack:posted:<channel>:<ts>`, the record of every message the dashboard posted (`src/lib/notifications/slackThreads.ts`). When nobody has the dashboard open, nothing runs; the next sync catches up.
+
+**Storage:** Redis `notif:*` keys. Items are kept 14 days, feeds capped at 300 per person (500 for the team). Comment and reply snippets (160 characters) are stored with the item, like the Slack-mention snippets above.
+
+```bash
+npm run notifications:preview -- --hours=24   # what the bell would have shown, from live Jira (read-only, stores nothing)
+npm run test:notifications
+```
+
 ## UI Design & Theming
 
 The interface is a Kibana/Jira-inspired enterprise operations console, not a marketing-style admin template:
@@ -478,24 +504,27 @@ If `graphify` is not on your shell path, use the installed binary directly:
 /Users/anurag.rai/.local/bin/graphify cluster-only .
 ```
 
-## Engineering Escalation Pilot (dry-run phase)
+## Engineering Escalation Pilot (shadow phase)
 
-A Jira -> Slack escalation service for TS tickets waiting on engineering, piloting with the Credentialing pod. Design from the 2026-10-02 discovery: a poll-and-reconcile service inside this app, Postgres for state, Slack threads with an Acknowledge button, and **no Jira writes**. It goes dry run -> private shadow channel -> live. Only the pure logic and a read-only dry run exist so far: nothing posts to Slack, nothing is scheduled, and no database is attached.
+A Jira -> Slack escalation service for TS tickets waiting on engineering, piloting with the Credentialing pod. Design from the 2026-10-02 discovery: a poll-and-reconcile service inside this app, one Slack thread per CP, and **no Jira writes**. It goes dry run -> shadow (test channel) -> live. The dry run and the shadow run exist; there is no live mode yet.
 
 - **Trigger:** a Support Ticket (10844) in **Waiting for product** (10633) with a linked CP on any link type, in either direction. One escalation per CP, since many TS tickets share one CP. Routing uses the **CP's own Pod** (`customfield_10165`), never the TS ticket's Pod.
 - **Clock:** JSM Time to Resolution (`cf[10650]`) is paused in Waiting for product on every ticket. So the engineering ladder uses its own business-hours timer from the moment the ticket entered that status, on JSM calendar 30 (Mon-Fri 09:00-18:00 ET, holidays). The frozen TTR remaining only bumps priority. Timers for CPs already waiting at go-live start at go-live, with one backlog digest message.
 - **Outcomes:** Ready for Release is `fix_ready`: the ladder stops and the thread stays open. Released/Closed resolves after a grace period that absorbs the open-PR guard flipping Released -> Blocked. Rejections (Won't Do, Duplicate, HF-Rejected, ...) resolve without "fixed" wording. A ticket re-entering Waiting for product reopens the escalation as a new episode.
-- **Modules** (`src/lib/escalation/`): `types.ts` (contract), `policy.ts` (proposed thresholds, status/resolution ids, calendar 30, routing seed from `podRouting.ts`), `readOnlyJira.ts` (the only Jira access: GETs plus the two search POSTs; everything else throws before any request is made), `businessHours.ts`, `slaParser.ts`, `classify.ts` (qualifying rules and actionable/info exceptions), `plan.ts` + `messages.ts` (ladder levels, priority bumps, rate limits, quiet hours, Slack text with no ticket summaries or customer names), `stateMachine.ts` (fix_ready, resolve grace, hand-back, pod change, reopen episodes).
+- **Thread per CP:** the first run that sees a qualifying CP posts one parent message: CP status and assignee, every waiting TS ticket and how long it has waited, and the next step. Every ladder level (L1 wait warning, L2 breach, L3 top owner), ticket joining or leaving, fix ready, resolved, hand-back and pod change is a reply in that thread, posted exactly once (the `esc:sent:<dedupeKey>` ledger). A ✅ reaction on the parent acknowledges the escalation: the first one per episode counts, and shadow mode accepts anyone's because no Slack ids are verified yet.
+- **Shadow run (`/escalations`):** off by default; **Start shadow run** switches it on. It posts real threads, but only to the shadow channel (`ESCALATION_SHADOW_CHANNEL` or `SLACK_TEST_CHANNEL`, read from the environment), never to a pod channel, and every @-mention is defused. It runs at most every 10 minutes, kicked off by the dashboard's notification polls (Vercel Hobby cron is daily), or on **Run now**. Caps: 3 new threads per run and 10 per day, most urgent first. CPs already waiting when it's first switched on are timed from that moment, with one go-live digest. State for this phase lives in Redis (`esc:*`); `ESCALATION_KILL=1` stops it.
+- **Modules** (`src/lib/escalation/`): `types.ts` (contract), `policy.ts` (proposed thresholds, status/resolution ids, calendar 30, routing seed from `podRouting.ts`), `readOnlyJira.ts` (the only Jira access: GETs plus the two search POSTs; everything else throws before any request is made), `businessHours.ts`, `slaParser.ts`, `classify.ts` (qualifying rules and actionable/info exceptions), `plan.ts` + `messages.ts` (ladder levels, priority bumps, rate limits, quiet hours, Slack text with no ticket summaries or customer names), `stateMachine.ts` (fix_ready, resolve grace, hand-back, pod change, reopen episodes). Shadow run: `sweep.ts` (the read-only Jira sweep, shared with the dry run), `threadUpdates.ts` (pure: what each thread should be told this run), `runner.ts`, `runnerStore.ts`, `acknowledge.ts` (✅ handling).
 - **Dry run:** `npm run escalation:dry-run` sweeps live Jira read-only and prints:
   - which escalations would open, what the messages would say, and the exceptions
   - how often CPs flip Released -> Blocked (to set the resolve grace)
   - running-SLA readings
 
   Pass `-- --readings-file=<path>` on separate runs (for example one in business hours and one in the evening) to compare Jira's SLA clock with ours. Pass `-- --json` for full output.
-- **Tests:** `npm run test:escalation-pilot`.
-- **Before shadow or live:**
-  - Vercel Pro on a company team (10-minute polling)
-  - Neon Postgres
+- **Tests:** `npm run test:escalation-pilot` (includes the shadow runner's thread lifecycle).
+- **Before live:**
+  - a real scheduler (Vercel Pro cron on a company team, 10-minute polling) instead of dashboard-driven runs
+  - Postgres for state (Neon), or a decision to keep Redis
+  - a live posting path to the pod channel, deliberately not built yet
   - a Slack app with chat:write, channels:history, groups:history, channels:read, groups:read, users:read, users:read.email and interactivity
   - verified Slack IDs for the Credentialing EM, PM and PM Manager
   - a named L3 owner and support owner

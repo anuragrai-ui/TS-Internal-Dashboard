@@ -152,12 +152,14 @@ export function renderLevel(level: 1 | 2 | 3, group: EscalationGroup, view: Leve
 }
 
 export function renderFixReady(group: EscalationGroup): string {
-  const { cp } = group;
+  return renderFixReadyFor(group.cp, group.tickets.length);
+}
 
+export function renderFixReadyFor(cp: { key: string; statusName: string; url: string }, waitingTickets: number): string {
   return finalizeText(
     [
       `:white_check_mark: ${link(cp.url, cp.key)} is *${escapeText(cp.statusName)}* - the fix is built and waiting to ship, so the escalation ladder is paused.`,
-      `This thread stays open until it's released; support will update the ${pluralize(group.tickets.length, "waiting TS ticket")} then.`,
+      `This thread stays open until it's released; support will update the ${pluralize(waitingTickets, "waiting TS ticket")} then.`,
     ].join("\n"),
   );
 }
@@ -171,6 +173,71 @@ export function renderBacklogDigest(cpKeys: string[], goLiveAt: string): string 
       "Their escalation timers start at go-live rather than at their original Waiting for product entry, so nothing escalates on past wait. Each gets its own thread as it posts:",
       keys,
     ].join("\n"),
+  );
+}
+
+/* ------------------------------------------------- thread updates (runner) */
+
+/* The slice of a CP the thread updates mention - keys, links and statuses only, like every other message here. */
+export interface CpRef {
+  key: string;
+  statusName: string;
+  url: string;
+}
+
+export type ResolvedReason = "rejected" | "shipped" | "ts_done" | "wrong_pod";
+
+export function renderResolved(cp: CpRef, reason: ResolvedReason, waitingTickets: number): string {
+  const cpLink = link(cp.url, cp.key);
+  const status = escapeText(cp.statusName);
+
+  if (reason === "shipped") {
+    return finalizeText(
+      `:white_check_mark: ${cpLink} is *${status}* - resolving this escalation. Support will update the ${pluralize(waitingTickets, "waiting TS ticket")}.`,
+    );
+  }
+  if (reason === "rejected") {
+    return finalizeText(
+      `:no_entry_sign: ${cpLink} was closed without a fix (*${status}*) - resolving this escalation. Support will decide the next step with the customer.`,
+    );
+  }
+  if (reason === "ts_done") {
+    return finalizeText(`:white_check_mark: Every TS ticket waiting on ${cpLink} is resolved - closing this escalation.`);
+  }
+  return finalizeText(`:mute: Marked as the wrong pod - this thread stops here.`);
+}
+
+export function renderHandedBack(cp: CpRef): string {
+  return finalizeText(
+    `:leftwards_arrow_with_hook: No TS tickets are waiting on ${link(cp.url, cp.key)} any more (they left Waiting for product), so this escalation stops here. If one comes back, it opens a new thread.`,
+  );
+}
+
+export function renderPodChanged(cp: CpRef, podName: string | null): string {
+  return finalizeText(
+    `:twisted_rightwards_arrows: ${link(cp.url, cp.key)} moved to ${podName ? `the ${escapeText(podName)} pod` : "another pod"} - this thread stops here.`,
+  );
+}
+
+export function renderLadderResumed(cp: CpRef): string {
+  return finalizeText(`:arrows_counterclockwise: ${link(cp.url, cp.key)} moved back to *${escapeText(cp.statusName)}* - the escalation ladder resumes.`);
+}
+
+export function renderTicketsChanged(cp: CpRef, joined: Array<{ key: string; url: string }>, left: string[], waitingNow: number): string {
+  const lines: string[] = [];
+  if (joined.length > 0) {
+    lines.push(`:heavy_plus_sign: Now also waiting on ${link(cp.url, cp.key)}: ${joined.map((ticket) => link(ticket.url, ticket.key)).join(", ")}.`);
+  }
+  if (left.length > 0) {
+    lines.push(`:heavy_minus_sign: No longer waiting (left Waiting for product): ${left.map(escapeText).join(", ")}.`);
+  }
+  lines.push(`${pluralize(waitingNow, "TS ticket")} waiting in total.`);
+  return finalizeText(lines.join("\n"));
+}
+
+export function renderAcknowledged(cp: CpRef, byName: string): string {
+  return finalizeText(
+    `:white_check_mark: Acknowledged by ${escapeText(byName)}. The ladder keeps counting engineering wait until ${escapeText(cp.key)} is ready for release - please share an ETA here when you have one.`,
   );
 }
 

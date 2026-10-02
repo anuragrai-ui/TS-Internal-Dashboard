@@ -21,67 +21,24 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { businessMsBetween } from "@/lib/escalation/businessHours";
-import { classify, cpOutcome } from "@/lib/escalation/classify";
+import { cpOutcome } from "@/lib/escalation/classify";
 import {
   CERTIFY_SUPPORT_CALENDAR,
   DEFAULT_ESCALATION_POLICY,
   ESCALATION_CP_ISSUE_TYPES,
   EPIC_ISSUE_TYPE,
-  MAJOR_INCIDENT_FIELD,
   PILOT_POD_OPTION_ID,
-  POD_FIELD,
   seedRoutingRows,
   SUPPORT_TICKET_ISSUE_TYPE_ID,
   TIME_TO_RESOLUTION_FIELD,
-  WAITING_FOR_PRODUCT_STATUS_ID,
 } from "@/lib/escalation/policy";
 import { planEscalations } from "@/lib/escalation/plan";
 import { createReadOnlyJiraClient, readOnlyJiraConfigFromEnv } from "@/lib/escalation/readOnlyJira";
 import { parseJsmSla } from "@/lib/escalation/slaParser";
+import { fullChangelog, mapLimit, statusTransitions, sweepWaitingForProduct } from "@/lib/escalation/sweep";
 
 import type { ReadOnlyJiraClient } from "@/lib/escalation/readOnlyJira";
-import type { CpSnapshot, Priority, StatusCategory, TsLink, TsSnapshot } from "@/lib/escalation/types";
-
-/* ------------------------------------------------------------------ jira shapes */
-
-interface JiraNamed {
-  id?: string;
-  key?: string;
-  name?: string;
-  value?: string;
-}
-
-interface JiraStatus extends JiraNamed {
-  statusCategory?: { key?: string };
-}
-
-interface JiraLinkedIssue {
-  key?: string;
-}
-
-interface JiraIssue {
-  fields: Record<string, unknown> & {
-    assignee?: { accountId?: string; displayName?: string } | null;
-    issuelinks?: Array<{
-      inwardIssue?: JiraLinkedIssue;
-      outwardIssue?: JiraLinkedIssue;
-      type?: JiraNamed;
-    }>;
-    issuetype?: JiraNamed | null;
-    priority?: JiraNamed | null;
-    resolution?: JiraNamed | null;
-    status?: JiraStatus | null;
-  };
-  key: string;
-}
-
-interface ChangelogPage {
-  isLast?: boolean;
-  maxResults?: number;
-  startAt?: number;
-  total?: number;
-  values?: Array<{ created?: string; items?: Array<{ fieldId?: string; field?: string; from?: string; to?: string }> }>;
-}
+import type { JiraIssue } from "@/lib/escalation/sweep";
 
 /* ---------------------------------------------------------------------- helpers */
 
@@ -103,38 +60,6 @@ function log(line = ""): void {
   }
 }
 
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (next < items.length) {
-        const index = next++;
-        out[index] = await fn(items[index]!);
-      }
-    }),
-  );
-  return out;
-}
-
-function statusCategory(status: JiraStatus | null | undefined): StatusCategory {
-  const key = status?.statusCategory?.key;
-  return key === "done" ? "done" : key === "indeterminate" ? "indeterminate" : "new";
-}
-
-const PRIORITIES = new Set<Priority>(["Critical", "High", "Medium", "Low"]);
-function toPriority(name: string | undefined): Priority | null {
-  return name && PRIORITIES.has(name as Priority) ? (name as Priority) : null;
-}
-
-function optionId(raw: unknown): string | null {
-  return raw && typeof raw === "object" && typeof (raw as JiraNamed).id === "string" ? (raw as JiraNamed).id! : null;
-}
-
-function optionName(raw: unknown): string | null {
-  return raw && typeof raw === "object" && typeof (raw as JiraNamed).value === "string" ? (raw as JiraNamed).value! : null;
-}
-
 function percentile(sorted: number[], p: number): number | null {
   if (sorted.length === 0) {
     return null;
@@ -144,88 +69,6 @@ function percentile(sorted: number[], p: number): number | null {
 
 function bh(ms: number): string {
   return `${(ms / 3_600_000).toFixed(1)} bh`;
-}
-
-/* ------------------------------------------------------------------- data load */
-
-const TS_FIELDS = ["status", "issuetype", "priority", "assignee", "issuelinks", POD_FIELD, TIME_TO_RESOLUTION_FIELD, MAJOR_INCIDENT_FIELD];
-const CP_FIELDS = ["status", "issuetype", "resolution", "assignee", "priority", POD_FIELD];
-
-function toTsSnapshot(issue: JiraIssue, baseUrl: string, enteredWfpAt: string | null): TsSnapshot {
-  const links: TsLink[] = [];
-  for (const link of issue.fields.issuelinks ?? []) {
-    const other = link.inwardIssue ?? link.outwardIssue;
-    if (other?.key?.startsWith("CP-")) {
-      links.push({
-        cpKey: other.key,
-        direction: link.inwardIssue ? "inward" : "outward",
-        linkTypeId: link.type?.id ?? "",
-        linkTypeName: link.type?.name ?? "",
-      });
-    }
-  }
-
-  return {
-    assigneeAccountId: issue.fields.assignee?.accountId ?? null,
-    assigneeName: issue.fields.assignee?.displayName ?? null,
-    enteredWfpAt,
-    issueTypeId: issue.fields.issuetype?.id ?? "",
-    key: issue.key,
-    links,
-    majorIncident: Boolean(issue.fields[MAJOR_INCIDENT_FIELD]),
-    podOptionId: optionId(issue.fields[POD_FIELD]),
-    priority: toPriority(issue.fields.priority?.name),
-    statusCategory: statusCategory(issue.fields.status),
-    statusId: issue.fields.status?.id ?? "",
-    statusName: issue.fields.status?.name ?? "",
-    ttr: parseJsmSla(issue.fields[TIME_TO_RESOLUTION_FIELD]),
-    url: `${baseUrl}/browse/${issue.key}`,
-  };
-}
-
-function toCpSnapshot(issue: JiraIssue, baseUrl: string): CpSnapshot {
-  return {
-    assigneeAccountId: issue.fields.assignee?.accountId ?? null,
-    assigneeName: issue.fields.assignee?.displayName ?? null,
-    issueTypeId: issue.fields.issuetype?.id ?? "",
-    issueTypeName: issue.fields.issuetype?.name ?? "",
-    key: issue.key,
-    podName: optionName(issue.fields[POD_FIELD]),
-    podOptionId: optionId(issue.fields[POD_FIELD]),
-    priorityName: issue.fields.priority?.name ?? null,
-    resolutionId: issue.fields.resolution?.id ?? null,
-    resolutionName: issue.fields.resolution?.name ?? null,
-    statusCategory: statusCategory(issue.fields.status),
-    statusId: issue.fields.status?.id ?? "",
-    statusName: issue.fields.status?.name ?? "",
-    url: `${baseUrl}/browse/${issue.key}`,
-  };
-}
-
-async function fullChangelog(client: ReadOnlyJiraClient, key: string): Promise<NonNullable<ChangelogPage["values"]>> {
-  const all: NonNullable<ChangelogPage["values"]> = [];
-  for (let startAt = 0; startAt < 5_000; ) {
-    const page = await client.get<ChangelogPage>(`/rest/api/3/issue/${key}/changelog`, { maxResults: 100, startAt });
-    const values = page.values ?? [];
-    all.push(...values);
-    if (page.isLast !== false || values.length === 0) {
-      break;
-    }
-    startAt += values.length;
-  }
-  return all;
-}
-
-function statusTransitions(changelog: NonNullable<ChangelogPage["values"]>): Array<{ at: string; from: string; to: string }> {
-  const out: Array<{ at: string; from: string; to: string }> = [];
-  for (const history of changelog) {
-    for (const item of history.items ?? []) {
-      if ((item.fieldId === "status" || item.field === "status") && history.created) {
-        out.push({ at: history.created, from: item.from ?? "", to: item.to ?? "" });
-      }
-    }
-  }
-  return out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
 
 /* ------------------------------------------------------------------ measurements */
@@ -327,37 +170,15 @@ async function main(): Promise<void> {
       : []),
   ];
 
-  /* 2. Every Support Ticket in Waiting for product. */
-  const tsJql = `issuetype = ${SUPPORT_TICKET_ISSUE_TYPE_ID} AND status = ${WAITING_FOR_PRODUCT_STATUS_ID} ORDER BY key`;
-  const [tsIssues, tsApprox] = await Promise.all([
-    client.searchJql<JiraIssue>(tsJql, TS_FIELDS, { maxTotal: 1_000 }),
-    client.approximateCount(tsJql),
-  ]);
-
-  /* 3. Every CP they link to, fetched with its OWN Pod (the routing key). */
-  const cpKeys = [...new Set(tsIssues.flatMap((issue) => toTsSnapshot(issue, baseUrl, null).links.map((link) => link.cpKey)))].sort();
-  const cpIssues: JiraIssue[] = [];
-  for (let i = 0; i < cpKeys.length; i += 50) {
-    const chunk = cpKeys.slice(i, i + 50);
-    cpIssues.push(...(await client.searchJql<JiraIssue>(`key in (${chunk.join(",")})`, CP_FIELDS, { maxTotal: 100 })));
-  }
-  const cps = new Map(cpIssues.map((issue) => [issue.key, toCpSnapshot(issue, baseUrl)]));
-
-  /* Simulating go-live: owners have no verified Slack ids yet, so "live" mode
-     surfaces exactly what would block going live (person_unmapped, L3...). */
+  /* 2-4. Every Support Ticket in Waiting for product, every CP they link to
+     (with its OWN Pod - the routing key), and WfP entry times for tickets that
+     join a pilot escalation. Simulating go-live: owners have no verified Slack
+     ids yet, so "live" mode surfaces exactly what would block going live
+     (person_unmapped, L3...). */
   const routing = seedRoutingRows("live");
-
-  /* 4. WfP entry time from the changelog - only for tickets that actually join a pilot escalation. */
-  const firstPass = classify(tsIssues.map((issue) => toTsSnapshot(issue, baseUrl, null)), cps, routing);
-  const pilotTsKeys = new Set(firstPass.escalations.flatMap((group) => group.tickets.map((ticket) => ticket.key)));
-  const wfpEntry = new Map<string, string | null>();
-  await mapLimit([...pilotTsKeys], 5, async (key) => {
-    const transitions = statusTransitions(await fullChangelog(client, key));
-    const lastInto = [...transitions].reverse().find((t) => t.to === WAITING_FOR_PRODUCT_STATUS_ID);
-    wfpEntry.set(key, lastInto?.at ?? null);
-  });
-  const tickets = tsIssues.map((issue) => toTsSnapshot(issue, baseUrl, wfpEntry.get(issue.key) ?? null));
-  const result = classify(tickets, cps, routing);
+  const sweep = await sweepWaitingForProduct(client, baseUrl, routing, { approximateCount: true });
+  const { cps } = sweep;
+  const result = sweep.classification;
 
   /* 5. Two plans: what day one of go-live would post (backlog timers start at
      go-live, one digest), and what the timers would say if counted from each
@@ -431,7 +252,12 @@ async function main(): Promise<void> {
       slaClockDrift: drift,
     },
     outOfScopeByPod: result.outOfScopeByPod,
-    sweep: { cpsFetched: cps.size, cpsLinked: cpKeys.length, tsApproximateCount: tsApprox, tsInWaitingForProduct: tsIssues.length },
+    sweep: {
+      cpsFetched: cps.size,
+      cpsLinked: sweep.cpKeysLinked,
+      tsApproximateCount: sweep.tsApproximateCount,
+      tsInWaitingForProduct: sweep.tsInWaitingForProduct,
+    },
   };
 
   if (asJson) {
@@ -440,7 +266,9 @@ async function main(): Promise<void> {
   }
 
   /* --------------------------------------------------------------- text report */
-  log(`Swept ${tsIssues.length} Support Tickets in Waiting for product (Jira count ~${tsApprox}), linked to ${cpKeys.length} CPs (${cps.size} readable).`);
+  log(
+    `Swept ${sweep.tsInWaitingForProduct} Support Tickets in Waiting for product (Jira count ~${sweep.tsApproximateCount}), linked to ${sweep.cpKeysLinked} CPs (${cps.size} readable).`,
+  );
   log(`Calendar 30 drift: ${calendarDrift.length === 0 ? "none" : calendarDrift.join("; ")}`);
   log("");
 

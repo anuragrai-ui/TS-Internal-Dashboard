@@ -4,10 +4,28 @@ import { applySlackTestMode } from "@/lib/slackTestMode";
 
 const SLACK_POST_MESSAGE_URL = "https://slack.com/api/chat.postMessage";
 const SLACK_LOOKUP_BY_EMAIL_URL = "https://slack.com/api/users.lookupByEmail";
+const SLACK_PERMALINK_URL = "https://slack.com/api/chat.getPermalink";
+const SLACK_USER_INFO_URL = "https://slack.com/api/users.info";
 
 interface SlackPostMessageResponse {
+  channel?: string;
   error?: string;
   ok: boolean;
+  ts?: string;
+}
+
+export interface PostedSlackMessageRef {
+  /* Where it actually landed - the test channel while test mode is on. */
+  channel: string;
+  redirected: boolean;
+  ts: string;
+}
+
+export interface PostSlackMessageOptions {
+  /* Also show a thread reply in the channel (Slack's reply_broadcast). */
+  broadcast?: boolean;
+  /* Post as a reply in this thread (the parent message's ts, in the channel it actually landed in). */
+  threadTs?: string;
 }
 
 /**
@@ -17,20 +35,34 @@ interface SlackPostMessageResponse {
  * other optional-integration pattern in this codebase (Redis, OCR,
  * escalation AI) - the cron route still runs and prepares drafts even
  * without Slack set up, it just skips the notification.
+ *
+ * Returns where the message landed and its ts, so callers can remember the
+ * thread (src/lib/notifications/slack.ts) and route its replies back to the
+ * ticket - or null if nothing was posted.
  */
-export async function postSlackMessage(requestedChannel: string, requestedText: string): Promise<boolean> {
-  /* Test mode (SLACK_TEST_CHANNEL) redirects every post - see src/lib/slackTestMode.ts. */
-  const { channel, text } = applySlackTestMode(requestedChannel, requestedText);
+export async function postSlackMessageDetailed(
+  requestedChannel: string,
+  requestedText: string,
+  options: PostSlackMessageOptions = {},
+): Promise<PostedSlackMessageRef | null> {
+  /* Test mode (SLACK_TEST_CHANNEL) redirects every post - see src/lib/slackTestMode.ts. A thread
+     reply follows its parent there too: the parent was redirected the same way. */
+  const { channel, redirected, text } = applySlackTestMode(requestedChannel, requestedText);
   const token = await getSlackBotToken();
 
   if (!token) {
     console.warn("No Slack token available (Vercel Connect / SLACK_BOT_TOKEN); skipping Slack notification.");
-    return false;
+    return null;
   }
 
   try {
     const response = await fetch(SLACK_POST_MESSAGE_URL, {
-      body: JSON.stringify({ channel, text }),
+      body: JSON.stringify({
+        channel,
+        text,
+        ...(options.threadTs ? { thread_ts: options.threadTs } : {}),
+        ...(options.threadTs && options.broadcast ? { reply_broadcast: true } : {}),
+      }),
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json; charset=utf-8",
@@ -41,15 +73,85 @@ export async function postSlackMessage(requestedChannel: string, requestedText: 
 
     const data = (await response.json()) as SlackPostMessageResponse;
 
-    if (!data.ok) {
+    if (!data.ok || !data.ts) {
       console.warn(`Slack postMessage failed: ${data.error ?? "unknown error"}`);
-      return false;
+      return null;
     }
 
-    return true;
+    return { channel: data.channel ?? channel, redirected, ts: data.ts };
   } catch (error) {
     console.warn("Slack postMessage request failed.", error);
-    return false;
+    return null;
+  }
+}
+
+export async function postSlackMessage(requestedChannel: string, requestedText: string): Promise<boolean> {
+  return (await postSlackMessageDetailed(requestedChannel, requestedText)) !== null;
+}
+
+/** A link that opens the message (or thread reply) in Slack; null if Slack won't say. Needs no extra scope. */
+export async function getSlackPermalink(channel: string, messageTs: string): Promise<string | null> {
+  const token = await getSlackBotToken();
+
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const url = new URL(SLACK_PERMALINK_URL);
+    url.searchParams.set("channel", channel);
+    url.searchParams.set("message_ts", messageTs);
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5_000) });
+    const data = (await response.json()) as { ok: boolean; permalink?: string };
+    return data.ok && data.permalink?.startsWith("https://") ? data.permalink : null;
+  } catch {
+    return null;
+  }
+}
+
+export interface SlackUserName {
+  displayName: string;
+  realName: string;
+}
+
+/** A Slack user's name (users:read), cached a week. Null - never throws - when it can't be read. */
+export async function getSlackUserName(userId: string): Promise<SlackUserName | null> {
+  if (!/^[UW][A-Z0-9]{2,}$/.test(userId)) {
+    return null;
+  }
+
+  const cacheKey = `slack_user_name:${userId}`;
+  const cached = await getCache<SlackUserName | null>(cacheKey);
+
+  if (cached) {
+    return cached.value;
+  }
+
+  const token = await getSlackBotToken();
+
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const url = new URL(SLACK_USER_INFO_URL);
+    url.searchParams.set("user", userId);
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5_000) });
+    const data = (await response.json()) as {
+      ok: boolean;
+      user?: { name?: string; profile?: { display_name?: string; real_name?: string }; real_name?: string };
+    };
+
+    if (!data.ok || !data.user) {
+      return null;
+    }
+
+    const realName = data.user.profile?.real_name || data.user.real_name || data.user.name || "";
+    const name: SlackUserName = { displayName: data.user.profile?.display_name || realName, realName };
+    await setCache<SlackUserName | null>(cacheKey, name, SLACK_USER_LOOKUP_TTL_SECONDS);
+    return name;
+  } catch {
+    return null;
   }
 }
 

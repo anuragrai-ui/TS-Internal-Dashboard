@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { slaBreachAlertCooldownKey } from "@/lib/followupAudit";
+import { rememberPostedSlackMessage } from "@/lib/notifications/slackThreads";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
-import { postSlackMessage } from "@/lib/slackApi";
+import { postSlackMessageDetailed } from "@/lib/slackApi";
 import { requireIdentity } from "@/lib/currentIdentity";
 import { getSlackTestChannel } from "@/lib/slackTestMode";
 
@@ -57,7 +58,7 @@ export async function POST(
     }
   }
 
-  const posted = await postSlackMessage(channel, text);
+  const posted = await postSlackMessageDetailed(channel, text);
 
   if (!posted) {
     return NextResponse.json(
@@ -65,6 +66,16 @@ export async function POST(
       { status: 502 },
     );
   }
+
+  /* Replies and reactions on the alert come back to whoever sent it, via the notification center. */
+  await rememberPostedSlackMessage(posted.channel, posted.ts, {
+    audience: [auth.identity.accountId],
+    cpKey: text.match(/\bCP-\d+\b/)?.[0],
+    kind: "sla_alert",
+    label: `the SLA-breach alert for ${key}`,
+    ticketKeys: [key],
+    threadTs: posted.ts,
+  });
 
   /* A test-mode post went to the test channel, not the pod - it must not block the real alert for 24h. */
   if (isRedisConfigured() && !getSlackTestChannel()) {

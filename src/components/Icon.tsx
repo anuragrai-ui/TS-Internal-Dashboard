@@ -1,7 +1,9 @@
 export type IconName =
   | "alert"
+  | "bell"
   | "bot"
   | "chart"
+  | "check"
   | "check-circle"
   | "chevron-down"
   | "chevron-left"
@@ -14,6 +16,7 @@ export type IconName =
   | "history"
   | "layers"
   | "menu"
+  | "message"
   | "moon"
   | "refresh"
   | "search"
@@ -21,8 +24,10 @@ export type IconName =
   | "sort-asc"
   | "sort-desc"
   | "sun"
+  | "ticket"
   | "user"
-  | "wrench";
+  | "wrench"
+  | "zap";
 
 interface IconProps {
   name: IconName;
@@ -35,6 +40,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M12 9v4" />
       <path d="M12 17h.01" />
       <path d="M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.29 2.25h17.78A1.5 1.5 0 0 0 22.18 18L13.71 3.86a1.5 1.5 0 0 0-2.42 0Z" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
     </>
   ),
   bot: (
@@ -52,6 +63,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M7 16v-4M12 16V8M17 16v-7" />
     </>
   ),
+  check: <path d="M20 6 9 17l-5-5" />,
   "check-circle": (
     <>
       <circle cx="12" cy="12" r="9" />
@@ -115,6 +127,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M3 18h18" />
     </>
   ),
+  message: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />,
   moon: <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" />,
   refresh: (
     <>
@@ -144,6 +157,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
     </>
   ),
+  ticket: (
+    <>
+      <path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4Z" />
+      <path d="M13 6v2M13 11v2M13 16v2" />
+    </>
+  ),
   user: (
     <>
       <circle cx="12" cy="8" r="4" />
@@ -153,6 +172,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
   wrench: (
     <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L2 19l3 3 7.3-7.3a4 4 0 0 0 5.4-5.4l-2.8 2.8-2-2 2.8-2.8Z" />
   ),
+  zap: <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" />,
 };
 
 export function Icon({ name, size = 16 }: IconProps): React.ReactElement {

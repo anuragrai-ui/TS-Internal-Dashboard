@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { requireIdentity } from "@/lib/currentIdentity";
-import { postSlackMessage } from "@/lib/slackApi";
+import { rememberPostedSlackMessage } from "@/lib/notifications/slackThreads";
+import { postSlackMessageDetailed } from "@/lib/slackApi";
 import { getSlackTestChannel } from "@/lib/slackTestMode";
 
 /* "Send test message" on Settings -> Slack. Only ever posts while test mode
@@ -21,12 +22,23 @@ export async function POST(): Promise<NextResponse> {
     );
   }
 
-  const posted = await postSlackMessage(
+  const posted = await postSlackMessageDetailed(
     testChannel,
-    `Test message sent by ${auth.identity.displayName} from Settings -> Slack in the TS dashboard. Add a reaction to this message to check that inbound events arrive - it will show up under "Recent events received".`,
+    `Test message sent by ${auth.identity.displayName} from Settings -> Slack in the TS dashboard. Add a reaction to this message, or reply in its thread - both show up under "Recent events received" and in your notification bell.`,
   );
 
-  return posted
-    ? NextResponse.json({ channel: testChannel, sent: true })
-    : NextResponse.json({ error: "Slack refused the message - check that the bot is invited to the test channel." }, { status: 502 });
+  if (!posted) {
+    return NextResponse.json({ error: "Slack refused the message - check that the bot is invited to the test channel." }, { status: 502 });
+  }
+
+  /* So a reply or reaction on the test message lands in the sender's notification bell - an end-to-end check of the whole loop. */
+  await rememberPostedSlackMessage(posted.channel, posted.ts, {
+    audience: [auth.identity.accountId],
+    kind: "test",
+    label: "your Slack test message",
+    ticketKeys: [],
+    threadTs: posted.ts,
+  });
+
+  return NextResponse.json({ channel: testChannel, sent: true });
 }

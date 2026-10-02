@@ -404,6 +404,8 @@ function testSlackReplyReactionMention(): void {
 
   const onlyBob = replyNotification({ channel: "C1", thread_ts: posted.threadTs, ts: "9.9", type: "message", user: "U1" }, { ...posted, audience: [BOB] }, ctx);
   assertEqual(onlyBob, null, "nothing when the only listener is the replier");
+  const ownTest = replyNotification({ channel: "C1", thread_ts: "1.1", ts: "9.8", type: "message", user: "U1" }, { ...posted, audience: [BOB], kind: "test", label: "your Slack test message" }, ctx);
+  assertEqual(ownTest?.audience, [BOB], "but replying to your own test message does notify you - that's the end-to-end check");
 
   const mentions = mentionNotifications({ channel: "C1", ts: "5.5", type: "message", user: "U1" }, new Map([["TS-100", [ALICE]], ["CP-55", [ALICE, BOB]]]), ctx);
   assertEqual(mentions.map((item) => item.id), ["slack:C1:5.5:m:TS-100", "slack:C1:5.5:m:CP-55"], "one per mentioned key");

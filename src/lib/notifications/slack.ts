@@ -107,6 +107,12 @@ function slackInstant(ts: string | undefined): string {
   return new Date(Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : Date.now()).toISOString();
 }
 
+/* Nobody hears about their own reply - except on the Settings -> Slack test message, whose whole
+   point is letting you check the loop by replying to it yourself. */
+function listeners(posted: PostedSlackMessage, ctx: SlackNotificationContext): string[] {
+  return posted.kind === "test" ? posted.audience : posted.audience.filter((id) => !ctx.actorAccountIds.has(id));
+}
+
 export function replyNotification(
   event: SlackInboundEvent,
   posted: PostedSlackMessage,
@@ -115,7 +121,7 @@ export function replyNotification(
   if (!event.channel || !event.ts) {
     return null;
   }
-  const audience = posted.audience.filter((id) => !ctx.actorAccountIds.has(id));
+  const audience = listeners(posted, ctx);
   if (audience.length === 0) {
     return null;
   }
@@ -147,7 +153,7 @@ export function reactionNotification(
   if (!channel || !ts || !event.user || !event.reaction) {
     return null;
   }
-  const audience = posted.audience.filter((id) => !ctx.actorAccountIds.has(id));
+  const audience = listeners(posted, ctx);
   if (audience.length === 0) {
     return null;
   }

@@ -1,6 +1,6 @@
 import { getCache, setCache } from "@/lib/cache";
+import { getSlackBotToken } from "@/lib/slackConnect";
 
-const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
 const SLACK_POST_MESSAGE_URL = "https://slack.com/api/chat.postMessage";
 const SLACK_LOOKUP_BY_EMAIL_URL = "https://slack.com/api/users.lookupByEmail";
 
@@ -10,17 +10,18 @@ interface SlackPostMessageResponse {
 }
 
 /**
- * Outbound Slack posting - genuinely new capability. The existing Slack
- * integration (app/api/slack/events/route.ts) is inbound-webhook-only and
- * has no bot token; this needs a new SLACK_BOT_TOKEN with the chat:write
- * scope. Gracefully no-ops with a warning if unconfigured, matching every
+ * Outbound Slack posting. The token comes from the Vercel Connect Slack
+ * connector at call time (src/lib/slackConnect.ts), or SLACK_BOT_TOKEN as a
+ * local override. Gracefully no-ops with a warning if unconfigured, matching every
  * other optional-integration pattern in this codebase (Redis, OCR,
  * escalation AI) - the cron route still runs and prepares drafts even
  * without Slack set up, it just skips the notification.
  */
 export async function postSlackMessage(channel: string, text: string): Promise<boolean> {
-  if (!SLACK_BOT_TOKEN) {
-    console.warn("SLACK_BOT_TOKEN not configured; skipping Slack notification.");
+  const token = await getSlackBotToken();
+
+  if (!token) {
+    console.warn("No Slack token available (Vercel Connect / SLACK_BOT_TOKEN); skipping Slack notification.");
     return false;
   }
 
@@ -28,7 +29,7 @@ export async function postSlackMessage(channel: string, text: string): Promise<b
     const response = await fetch(SLACK_POST_MESSAGE_URL, {
       body: JSON.stringify({ channel, text }),
       headers: {
-        Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json; charset=utf-8",
       },
       method: "POST",
@@ -81,7 +82,7 @@ function guessEmailFromDisplayName(displayName: string): string | null {
 /**
  * Resolves a Jira/org-chart display name to a real Slack user ID, via
  * Slack's own users.lookupByEmail (requires the users:read.email scope on
- * SLACK_BOT_TOKEN) against the guessed email above. Returns null - never
+ * the Slack token) against the guessed email above. Returns null - never
  * throws - on a missing token, an unguessable name, no match, or a missing
  * scope, since this always backs a best-effort @-mention in an internal
  * alert, not something that should block the alert from being sent.
@@ -94,13 +95,15 @@ export async function findSlackUserIdByName(displayName: string): Promise<string
     return cached.value;
   }
 
-  if (!SLACK_BOT_TOKEN) {
-    return null;
-  }
-
   const email = guessEmailFromDisplayName(displayName);
 
   if (!email) {
+    return null;
+  }
+
+  const token = await getSlackBotToken();
+
+  if (!token) {
     return null;
   }
 
@@ -109,7 +112,7 @@ export async function findSlackUserIdByName(displayName: string): Promise<string
     url.searchParams.set("email", email);
 
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}` },
+      headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(10_000),
     });
 

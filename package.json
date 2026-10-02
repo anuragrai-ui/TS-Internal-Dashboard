@@ -23,12 +23,15 @@
     "test:reply-tracking": "npx tsx scripts/test-reply-tracking.ts",
     "test:sla-breach-alert": "npx tsx scripts/test-sla-breach-alert.ts",
     "test:slack": "npx tsx scripts/test-slack-signature.ts",
+    "test:slack-request-auth": "npx tsx scripts/test-slack-request-auth.ts",
     "test:theme": "npx tsx scripts/test-theme.ts",
     "test:user-jira-tokens": "npx tsx scripts/test-user-jira-tokens.ts",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@upstash/redis": "^1.38.3",
+    "@vercel/connect": "2.3.5",
+    "@vercel/oidc": "3.8.9",
     "next": "^16.2.10",
     "onnxruntime-node": "^1.27.0",
     "react": "^19.2.7",

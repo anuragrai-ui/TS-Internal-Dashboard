@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { truncateText } from "@/lib/jiraClient";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
-import { verifySlackSignature } from "@/lib/slackSignature";
+import { authenticateSlackRequest } from "@/lib/slackRequestAuth";
 
 const TICKET_KEY_PATTERN = /\b(?:TS|CP)-\d+\b/g;
 const MENTION_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -70,29 +70,46 @@ async function recordMentions(event: SlackEvent): Promise<void> {
   );
 }
 
-export async function POST(request: Request): Promise<NextResponse> {
-  // Fail closed: with no signing secret configured there's no way to tell a
-  // real Slack request from a forged one.
-  if (!process.env.SLACK_SIGNING_SECRET) {
-    return NextResponse.json({ error: "Slack events are not configured on this server." }, { status: 503 });
+/* Interactivity (button clicks, shortcuts) arrives form-encoded as payload=<json>,
+   Events API as plain JSON. Unparseable bodies are acknowledged and ignored
+   rather than 500ing, which would make Connect retry the delivery 3 times. */
+function parsePayload(rawBody: string, contentType: string): SlackEventPayload | null {
+  try {
+    if (contentType.includes("application/x-www-form-urlencoded")) {
+      const payload = new URLSearchParams(rawBody).get("payload");
+      return payload ? (JSON.parse(payload) as SlackEventPayload) : null;
+    }
+    return JSON.parse(rawBody) as SlackEventPayload;
+  } catch {
+    return null;
   }
+}
 
+export async function POST(request: Request): Promise<NextResponse> {
   const rawBody = await request.text();
-  const signature = request.headers.get("x-slack-signature") ?? "";
-  const timestamp = request.headers.get("x-slack-request-timestamp") ?? "";
-
-  const verified = verifySlackSignature({
+  const auth = await authenticateSlackRequest({
+    authorization: request.headers.get("authorization"),
     rawBody,
-    signature,
-    signingSecret: process.env.SLACK_SIGNING_SECRET,
-    timestamp,
+    signature: request.headers.get("x-slack-signature"),
+    timestamp: request.headers.get("x-slack-request-timestamp"),
   });
 
-  if (!verified) {
-    return NextResponse.json({ error: "Invalid Slack signature." }, { status: 401 });
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.reason }, { status: auth.status });
   }
 
-  const payload = JSON.parse(rawBody) as SlackEventPayload;
+  const payload = parsePayload(rawBody, request.headers.get("content-type") ?? "");
+
+  if (!payload) {
+    console.warn(`Ignoring an unparseable Slack payload (via ${auth.via}).`);
+    return NextResponse.json({ ok: true }, { status: 200 });
+  }
+
+  /* Diagnostic for the escalation pilot: tells us whether Connect forwards
+     interactivity (an Acknowledge button) or only Events API events. */
+  if (payload.type && payload.type !== "event_callback" && payload.type !== "url_verification") {
+    console.info(`Slack ${payload.type} payload received via ${auth.via}.`);
+  }
 
   if (payload.type === "url_verification") {
     return new NextResponse(payload.challenge ?? "", { status: 200 });

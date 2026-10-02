@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { truncateText } from "@/lib/jiraClient";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
+import { recordInboundSlackEvent } from "@/lib/slackInboundLog";
 import { authenticateSlackRequest } from "@/lib/slackRequestAuth";
 
 const TICKET_KEY_PATTERN = /\b(?:TS|CP)-\d+\b/g;
@@ -11,6 +12,9 @@ const MAX_MENTIONS_PER_TICKET = 10;
 interface SlackEvent {
   bot_id?: string;
   channel?: string;
+  item?: { channel?: string; ts?: string };
+  reaction?: string;
+  user?: string;
   subtype?: string;
   text?: string;
   ts?: string;
@@ -18,9 +22,12 @@ interface SlackEvent {
 }
 
 interface SlackEventPayload {
+  /* Interactivity payloads (block_actions etc.) carry these instead of `event`. */
+  channel?: { id?: string };
   challenge?: string;
   event?: SlackEvent;
   type?: string;
+  user?: { id?: string };
 }
 
 interface StoredSlackMention {
@@ -114,6 +121,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (payload.type === "url_verification") {
     return new NextResponse(payload.challenge ?? "", { status: 200 });
   }
+
+  await recordInboundSlackEvent({
+    at: new Date().toISOString(),
+    channel: payload.event?.channel ?? payload.event?.item?.channel ?? payload.channel?.id,
+    eventType: payload.event?.type,
+    payloadType: payload.type ?? "unknown",
+    reaction: payload.event?.reaction,
+    user: payload.event?.user ?? payload.user?.id,
+    via: auth.via,
+  });
 
   if (payload.type === "event_callback" && payload.event?.type === "message") {
     const event = payload.event;

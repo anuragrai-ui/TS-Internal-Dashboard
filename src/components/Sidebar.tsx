@@ -44,7 +44,10 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Operations",
   },
   {
-    items: [{ href: "/settings/jira-tokens", icon: "gear", label: "Jira Tokens" }],
+    items: [
+      { href: "/settings/jira-tokens", icon: "gear", label: "Jira Tokens" },
+      { href: "/settings/slack", icon: "bot", label: "Slack" },
+    ],
     label: "Settings",
   },
 ];

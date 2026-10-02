@@ -6,6 +6,7 @@ import {
   TIME_TO_RESOLUTION_FIELD,
   WAITING_FOR_PRODUCT_STATUS_ID,
 } from "@/lib/escalation/policy";
+import { ReadOnlyJiraError } from "@/lib/escalation/readOnlyJira";
 import { parseJsmSla } from "@/lib/escalation/slaParser";
 
 import type { ReadOnlyJiraClient } from "@/lib/escalation/readOnlyJira";
@@ -172,13 +173,44 @@ export function statusTransitions(changelog: NonNullable<ChangelogPage["values"]
   return out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
 
-/** Issues by key, 50 per search. Keys that don't come back (deleted, no permission) are simply absent. */
-export async function searchByKeys(client: ReadOnlyJiraClient, keys: string[], fields: string[]): Promise<JiraIssue[]> {
+/**
+ * Issues by key, 50 per search. Keys that don't come back are simply absent.
+ * Jira rejects a whole `key in (...)` with a 400 when one key no longer
+ * exists or isn't visible (a deleted or moved ticket), so a failing chunk
+ * is re-read one key at a time and only the bad keys are skipped - one
+ * deleted ticket must not wedge every later run.
+ */
+export async function searchByKeys<T extends { key: string } = JiraIssue>(
+  client: ReadOnlyJiraClient,
+  keys: string[],
+  fields: string[],
+  opts: { expand?: string; extraJql?: string } = {},
+): Promise<T[]> {
+  const search = (chunk: string[]): Promise<T[]> =>
+    client.searchJql<T>(`key in (${chunk.join(",")})${opts.extraJql ?? ""}`, fields, { expand: opts.expand, maxTotal: KEY_CHUNK * 2 });
+
+  const searchChunk = async (chunk: string[]): Promise<T[]> => {
+    try {
+      return await search(chunk);
+    } catch (error) {
+      if (!(error instanceof ReadOnlyJiraError) || error.status !== 400) {
+        throw error;
+      }
+      if (chunk.length === 1) {
+        return [];
+      }
+      const found: T[] = [];
+      for (const key of chunk) {
+        found.push(...(await searchChunk([key])));
+      }
+      return found;
+    }
+  };
+
   const unique = [...new Set(keys)].sort();
-  const out: JiraIssue[] = [];
+  const out: T[] = [];
   for (let i = 0; i < unique.length; i += KEY_CHUNK) {
-    const chunk = unique.slice(i, i + KEY_CHUNK);
-    out.push(...(await client.searchJql<JiraIssue>(`key in (${chunk.join(",")})`, fields, { maxTotal: KEY_CHUNK * 2 })));
+    out.push(...(await searchChunk(unique.slice(i, i + KEY_CHUNK))));
   }
   return out;
 }

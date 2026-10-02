@@ -1,5 +1,6 @@
 import { renderAcknowledged } from "@/lib/escalation/messages";
-import { loadRecord, setAckIfFirst } from "@/lib/escalation/runnerStore";
+import { isEscalationKilled } from "@/lib/escalation/policy";
+import { getRunnerConfig, loadRecord, setAckIfFirst } from "@/lib/escalation/runnerStore";
 import { rememberPostedSlackMessage } from "@/lib/notifications/slackThreads";
 import { postSlackMessageDetailed } from "@/lib/slackApi";
 import { neutralizeMentions } from "@/lib/slackTestMode";
@@ -40,6 +41,11 @@ export async function acknowledgeFromReaction(args: {
 
   /* Only a ✅ on the parent itself - a reaction on a thread reply isn't an acknowledgement. */
   if (posted.kind !== "escalation" || !posted.cpKey || posted.threadTs !== args.messageTs || !isAckReaction(args.reaction)) {
+    return null;
+  }
+
+  /* Paused or killed means nothing posts at all - an acknowledgement reply included. */
+  if (isEscalationKilled() || (await getRunnerConfig()).mode !== "shadow") {
     return null;
   }
 

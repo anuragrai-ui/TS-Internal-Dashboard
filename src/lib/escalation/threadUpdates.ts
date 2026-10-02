@@ -197,6 +197,8 @@ export interface StepInput {
   attachedTsStates: CurrentObservation["attachedTsStates"];
   cp: CpSnapshot | null;
   cpKey: string;
+  /* Highest episode this CP has ever had, even if its record has since been dropped. */
+  episodeFloor?: number;
   group: EscalationGroup | null;
   now: string;
   planned: PlannedEscalation | null;
@@ -233,9 +235,13 @@ export function stepEscalation(input: StepInput): { events: ReconcileEvent[]; ou
 
   /* A reopen is a new episode with a new thread: none of the old thread's fields carry over. */
   const reopened = result.events.some((event) => event.type === "reopened");
+  /* With no stored record, reconcile starts at episode 1; continue the CP's numbering instead, or the
+     new thread would collide with the dropped one's dedupe keys and acknowledgement. */
+  const episode = previous === null && (input.episodeFloor ?? 0) >= result.next.episode ? (input.episodeFloor ?? 0) + 1 : result.next.episode;
   const record: EscalationRecord = {
     ...(reopened || previous === null ? {} : previous),
     ...result.next,
+    episode,
     cpStatusName: cp?.statusName ?? previous?.cpStatusName,
     lastPlan: planned
       ? {

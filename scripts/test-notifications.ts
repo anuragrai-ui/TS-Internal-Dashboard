@@ -96,6 +96,12 @@ function memoryFeedRedis(): FeedRedis & { raw: Map<string, unknown> } {
         .forEach(({ member }) => zset(key).delete(member));
       return Promise.resolve();
     },
+    ztrimBelow: (key, maxScore) => {
+      sorted(key)
+        .filter(({ score }) => score <= maxScore)
+        .forEach(({ member }) => zset(key).delete(member));
+      return Promise.resolve();
+    },
   };
 }
 
@@ -116,9 +122,10 @@ async function testFanOutAndDedupe(): Promise<void> {
   const again = await addNotifications([notification("a", ["alice", "bob"])], new Date(now.getTime() + 60_000), store);
   assertEqual(again.length, 0, "an id seen before is never added twice");
 
-  const alice = await listNotifications("alice", {}, store);
-  const bob = await listNotifications("bob", {}, store);
-  const team = await listNotifications("carol", { scope: "team" }, store);
+  const nowMs = now.getTime() + 120_000;
+  const alice = await listNotifications("alice", { nowMs }, store);
+  const bob = await listNotifications("bob", { nowMs }, store);
+  const team = await listNotifications("carol", { nowMs, scope: "team" }, store);
   assertEqual(alice.items.map((item) => item.id).sort(), ["a", "b"], "alice sees both");
   assertEqual(bob.items.map((item) => item.id), ["a"], "bob sees only his");
   assertEqual(team.items.length, 2, "team feed holds everything");
@@ -132,17 +139,18 @@ async function testUnreadAndMarkRead(): Promise<void> {
   const store = memoryFeedRedis();
   const t0 = new Date("2026-10-02T16:00:00.000Z");
   await addNotifications([notification("a", ["alice"]), notification("b", ["alice"]), notification("c", ["alice"])], t0, store);
-  assertEqual(await getUnreadCount("alice", store), 3, "three new items unread");
+  const nowMs = t0.getTime() + 300_000;
+  assertEqual(await getUnreadCount("alice", store, nowMs), 3, "three new items unread");
 
   const v1 = await getFeedVersion("alice", "mine", store);
-  assertEqual(await markNotificationsRead("alice", { ids: ["b"] }, store), 2, "marking one read leaves two");
+  assertEqual(await markNotificationsRead("alice", { ids: ["b"] }, store, nowMs), 2, "marking one read leaves two");
   assert((await getFeedVersion("alice", "mine", store)) !== v1, "read changes bump the version");
 
-  assertEqual(await markNotificationsRead("alice", { all: true }, store), 0, "mark all read clears the badge");
+  assertEqual(await markNotificationsRead("alice", { all: true }, store, nowMs), 0, "mark all read clears the badge");
 
   /* Found by the sync after "Mark all read", although it happened before it: still news. */
   await addNotifications([notification("late", ["alice"], "2026-10-02T15:59:00.000Z")], new Date(t0.getTime() + 120_000), store);
-  const page = await listNotifications("alice", {}, store);
+  const page = await listNotifications("alice", { nowMs }, store);
   assertEqual(page.unreadCount, 1, "a late arrival is unread");
   assertEqual(page.items[0]?.id, "late", "and it is at the top of the feed");
   assert(page.items.slice(1).every((item) => item.read), "everything before the cursor stays read");
@@ -155,16 +163,45 @@ async function testPagingAndExpiry(): Promise<void> {
   const items = Array.from({ length: 5 }, (_, i) => notification(`n${i}`, ["alice"], `2026-10-02T15:0${i}:00.000Z`));
   await addNotifications(items, new Date("2026-10-02T16:00:00.000Z"), store);
 
-  const first = await listNotifications("alice", { limit: 2 }, store);
+  const nowMs = Date.parse("2026-10-02T16:05:00.000Z");
+  const first = await listNotifications("alice", { limit: 2, nowMs }, store);
   assertEqual(first.items.map((item) => item.id), ["n4", "n3"], "newest first within a batch");
   assert(first.hasMore, "more pages exist");
-  const second = await listNotifications("alice", { before: first.items.at(-1)?.score, limit: 2 }, store);
+  const second = await listNotifications("alice", { before: first.items.at(-1)?.score, limit: 2, nowMs }, store);
   assertEqual(second.items.map((item) => item.id), ["n2", "n1"], "next page continues below the cursor");
 
   store.raw.delete("notif:item:n0");
-  const last = await listNotifications("alice", { before: second.items.at(-1)?.score, limit: 2 }, store);
+  const last = await listNotifications("alice", { before: second.items.at(-1)?.score, limit: 2, nowMs }, store);
   assertEqual(last.items.length, 0, "an expired item is skipped");
-  assertEqual((await listNotifications("alice", { limit: 10 }, store)).items.length, 4, "and removed from the feed");
+  assertEqual((await listNotifications("alice", { limit: 10, nowMs }, store)).items.length, 4, "and removed from the feed");
+  console.log("PASS");
+}
+
+async function testUnreadBadgeIsExact(): Promise<void> {
+  console.log("\n--- Test: the badge ignores expired items and still counts unread ones behind 100 opened ones ---");
+  const store = memoryFeedRedis();
+  const t0 = Date.parse("2026-10-02T16:00:00.000Z");
+  const day = 86_400_000;
+
+  /* 120 items; the newest 100 opened one by one, the oldest 20 never. */
+  await addNotifications(
+    Array.from({ length: 120 }, (_, i) => notification(`n${String(i).padStart(3, "0")}`, ["alice"], new Date(t0 - (120 - i) * 60_000).toISOString())),
+    new Date(t0),
+    store,
+  );
+  const newest = (await listNotifications("alice", { limit: 50, nowMs: t0 }, store)).items.map((item) => item.id);
+  const next = (await listNotifications("alice", { before: Number.MAX_SAFE_INTEGER, limit: 50, nowMs: t0 }, store)).items;
+  assertEqual(newest.length, 50, "page of 50");
+  await markNotificationsRead("alice", { ids: newest }, store, t0);
+  const olderPage = await listNotifications("alice", { before: next.at(-1)?.score, limit: 50, nowMs: t0 }, store);
+  await markNotificationsRead("alice", { ids: olderPage.items.map((item) => item.id) }, store, t0);
+  assertEqual(await getUnreadCount("alice", store, t0), 20, "the 20 never opened still count, behind 100 opened ones");
+
+  /* Two weeks later the items have expired (their entries linger until the next write) - nothing to show, nothing to count. */
+  assertEqual(await getUnreadCount("alice", store, t0 + 15 * day), 0, "expired entries never count");
+  await addNotifications([notification("fresh", ["alice"])], new Date(t0 + 15 * day), store);
+  assertEqual(await getUnreadCount("alice", store, t0 + 15 * day), 1, "only the fresh item");
+  assertEqual((await listNotifications("alice", { limit: 50, nowMs: t0 + 15 * day }, store)).items.length, 1, "and the old entries were pruned on write");
   console.log("PASS");
 }
 
@@ -430,6 +467,7 @@ async function main(): Promise<void> {
   await testFanOutAndDedupe();
   await testUnreadAndMarkRead();
   await testPagingAndExpiry();
+  await testUnreadBadgeIsExact();
   testTicketComments();
   testTicketHistory();
   testAutomationEchoSuppressed();

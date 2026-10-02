@@ -132,6 +132,8 @@ export function NotificationBell(): React.ReactElement {
   const newestScoreRef = useRef<number | null>(null);
   const desktopRef = useRef<DesktopState>("off");
   const pollRef = useRef<() => void>(() => undefined);
+  /* Bumped around every mark-read: a poll that started before it may carry the old read state, so its answer is dropped. */
+  const readGenRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -170,6 +172,7 @@ export function NotificationBell(): React.ReactElement {
   useEffect(() => {
     let stopped = false;
     let inFlight = false;
+    let repoll = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const schedule = (): void => {
@@ -184,6 +187,7 @@ export function NotificationBell(): React.ReactElement {
         return;
       }
       inFlight = true;
+      const generation = readGenRef.current;
       try {
         const params = new URLSearchParams({ limit: "20", scope: "mine" });
         if (versionRef.current) {
@@ -196,6 +200,11 @@ export function NotificationBell(): React.ReactElement {
           return;
         }
         const body = (await response.json()) as PollBody;
+        if (generation !== readGenRef.current) {
+          /* Something was marked read while this was in flight - don't paint the old state back. */
+          repoll = true;
+          return;
+        }
         if (!response.ok) {
           setError(body.error ?? "Notifications are unavailable right now.");
         } else if (!body.unchanged && Array.isArray(body.items)) {
@@ -206,7 +215,12 @@ export function NotificationBell(): React.ReactElement {
         /* Offline or a deploy in progress - the next tick tries again. */
       } finally {
         inFlight = false;
-        schedule();
+        if (repoll && !stopped) {
+          repoll = false;
+          void poll();
+        } else {
+          schedule();
+        }
       }
     };
 
@@ -224,7 +238,11 @@ export function NotificationBell(): React.ReactElement {
 
     pollRef.current = () => {
       versionRef.current = null;
-      void poll();
+      if (inFlight) {
+        repoll = true;
+      } else {
+        void poll();
+      }
     };
     void poll();
     document.addEventListener("visibilitychange", wake);
@@ -301,10 +319,13 @@ export function NotificationBell(): React.ReactElement {
   }, [open]);
 
   const markRead = useCallback(async (ids: string[] | "all") => {
+    readGenRef.current += 1;
     setMine((page) => markLocally(page, ids));
     setTeam((page) => markLocally(page, ids));
     setToasts((current) => (ids === "all" ? [] : current.filter((toast) => !ids.includes(toast.id))));
     const unreadCount = await postMarkRead(ids === "all" ? { all: true } : { ids });
+    /* Again after the write: a poll that started while it was in flight may predate it too. */
+    readGenRef.current += 1;
     if (unreadCount !== null) {
       setMine((page) => page && { ...page, unreadCount });
     }

@@ -1,4 +1,5 @@
 import { createReadOnlyJiraClient, readOnlyJiraConfigFromEnv } from "@/lib/escalation/readOnlyJira";
+import { searchByKeys } from "@/lib/escalation/sweep";
 import { notificationsFromJiraChanges } from "@/lib/notifications/jiraChanges";
 import { addNotifications } from "@/lib/notifications/store";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
@@ -32,7 +33,6 @@ const FIRST_RUN_LOOKBACK_MS = 15 * 60_000;
 const MAX_LOOKBACK_MS = 24 * 3_600_000;
 const COMMENTS_PER_ISSUE = 10;
 const COMMENT_FETCH_CONCURRENCY = 4;
-const KEY_CHUNK = 50;
 
 const TS_FIELDS = ["assignee", "reporter", "status", "summary", "updated"];
 const CP_LIGHT_FIELDS = ["issuelinks", "updated"];
@@ -67,15 +67,6 @@ function linkedKeys(issue: RawIssue, prefix: string): string[] {
   return (issue.fields.issuelinks ?? [])
     .map((link) => (link.inwardIssue ?? link.outwardIssue)?.key)
     .filter((key): key is string => typeof key === "string" && key.startsWith(prefix));
-}
-
-async function searchByKeys(client: ReadOnlyJiraClient, keys: string[], extraJql: string, fields: string[], expand?: string): Promise<RawIssue[]> {
-  const out: RawIssue[] = [];
-  for (let i = 0; i < keys.length; i += KEY_CHUNK) {
-    const chunk = keys.slice(i, i + KEY_CHUNK);
-    out.push(...(await client.searchJql<RawIssue>(`key in (${chunk.join(",")})${extraJql}`, fields, { expand, maxTotal: KEY_CHUNK })));
-  }
-  return out;
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -116,24 +107,25 @@ export async function collectJiraNotifications(args: {
   const registered = new Set(users.map((user) => user.accountId));
   const assignees = users.map((user) => jqlString(user.accountId)).join(", ");
 
+  /* Newest first: if a long catch-up (a quiet night, up to a day) hits the cap, it's the oldest changes that get dropped. */
   const [tsIssues, cpLight] = await Promise.all([
     client.searchJql<RawIssue>(
-      `project = TS AND assignee in (${assignees}) AND updated >= -${windowMinutes}m ORDER BY updated ASC`,
+      `project = TS AND assignee in (${assignees}) AND updated >= -${windowMinutes}m ORDER BY updated DESC`,
       TS_FIELDS,
       { expand: "changelog", maxTotal: 200 },
     ),
-    client.searchJql<RawIssue>(`project = CP AND updated >= -${windowMinutes}m ORDER BY updated ASC`, CP_LIGHT_FIELDS, { maxTotal: 300 }),
+    client.searchJql<RawIssue>(`project = CP AND updated >= -${windowMinutes}m ORDER BY updated DESC`, CP_LIGHT_FIELDS, { maxTotal: 300 }),
   ]);
 
   /* A CP only matters here if a registered user's TS ticket links to it. */
   const cpToTs = new Map(cpLight.map((cp) => [cp.key, linkedKeys(cp, "TS-")]));
   const linkedTsKeys = [...new Set([...cpToTs.values()].flat())];
-  const ownedLinkedTs = await searchByKeys(client, linkedTsKeys, ` AND assignee in (${assignees})`, ["assignee"]);
+  const ownedLinkedTs = await searchByKeys<RawIssue>(client, linkedTsKeys, ["assignee"], { extraJql: ` AND assignee in (${assignees})` });
   const ownerByTs = new Map(
     ownedLinkedTs.flatMap((issue) => (issue.fields.assignee?.accountId ? [[issue.key, issue.fields.assignee.accountId] as const] : [])),
   );
   const relevantCpKeys = [...cpToTs.entries()].filter(([, tsKeys]) => tsKeys.some((key) => ownerByTs.has(key))).map(([key]) => key);
-  const cpIssues = relevantCpKeys.length > 0 ? await searchByKeys(client, relevantCpKeys, "", CP_FIELDS, "changelog") : [];
+  const cpIssues = relevantCpKeys.length > 0 ? await searchByKeys<RawIssue>(client, relevantCpKeys, CP_FIELDS, { expand: "changelog" }) : [];
 
   /* Comments aren't in the changelog: one small read per issue that changed inside the window. */
   const needComments = [...tsIssues, ...cpIssues].filter((issue) => {
@@ -220,7 +212,9 @@ export async function syncJiraNotifications(now: Date = new Date()): Promise<Jir
       users,
     });
 
-    const added = await addNotifications(collected.notifications, now);
+    /* Scored when written, not when the sync started: the reads take seconds, and a Slack item written
+       meanwhile must not sort above this batch (the bell only toasts what's newer than it has seen). */
+    const added = await addNotifications(collected.notifications, new Date());
     await redis.set(CURSOR_KEY, now.toISOString(), { ex: 7 * 86_400 });
 
     return {

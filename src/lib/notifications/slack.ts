@@ -1,5 +1,6 @@
 import { acknowledgeFromReaction } from "@/lib/escalation/acknowledge";
 import { createReadOnlyJiraClient, readOnlyJiraConfigFromEnv } from "@/lib/escalation/readOnlyJira";
+import { searchByKeys } from "@/lib/escalation/sweep";
 import { getPostedSlackMessage } from "@/lib/notifications/slackThreads";
 import { addNotifications } from "@/lib/notifications/store";
 import { isRedisConfigured } from "@/lib/redis";
@@ -222,9 +223,17 @@ async function ticketOwners(keys: string[], registered: ReadonlySet<string>): Pr
   }
 
   const client = createReadOnlyJiraClient(readOnlyJiraConfigFromEnv());
-  type Issue = { fields: { assignee?: { accountId?: string } | null; issuelinks?: Array<{ inwardIssue?: { key?: string }; outwardIssue?: { key?: string } }> }; key: string };
+  type Issue = {
+    fields: {
+      assignee?: { accountId?: string } | null;
+      issuelinks?: Array<{ inwardIssue?: { key?: string }; outwardIssue?: { key?: string } }>;
+      status?: { statusCategory?: { key?: string } } | null;
+    };
+    key: string;
+  };
 
-  const issues = await client.searchJql<Issue>(`key in (${keys.join(",")})`, ["assignee", "issuelinks"], { maxTotal: MAX_MENTIONED_KEYS });
+  /* searchByKeys skips keys Jira won't resolve ("TS-2025" in a sentence, a deleted ticket) instead of failing them all. */
+  const issues = await searchByKeys<Issue>(client, keys, ["assignee", "issuelinks"]);
   const cpLinks = new Map<string, string[]>();
 
   for (const issue of issues) {
@@ -243,7 +252,9 @@ async function ticketOwners(keys: string[], registered: ReadonlySet<string>): Pr
 
   const linkedTs = [...new Set([...cpLinks.values()].flat())].slice(0, 100);
   if (linkedTs.length > 0) {
-    const tsIssues = await client.searchJql<Issue>(`key in (${linkedTs.join(",")}) AND statusCategory != Done`, ["assignee"], { maxTotal: 100 });
+    const tsIssues = (await searchByKeys<Issue>(client, linkedTs, ["assignee", "status"])).filter(
+      (issue) => issue.fields.status?.statusCategory?.key !== "done",
+    );
     const ownerByTs = new Map(tsIssues.map((issue) => [issue.key, issue.fields.assignee?.accountId]));
     for (const [cpKey, tsKeys] of cpLinks) {
       const cpOwners = [...new Set(tsKeys.map((key) => ownerByTs.get(key)).filter((id): id is string => Boolean(id && registered.has(id))))];
@@ -316,11 +327,16 @@ async function notifyFromMessage(event: SlackInboundEvent): Promise<AppNotificat
   }
 
   if (keys.length > 0) {
-    /* Whoever already hears about this message as a thread reply isn't told twice. */
-    const toldAlready = new Set(reply?.audience ?? []);
-    const owners = await ticketOwners(keys, new Set(users.map((user) => user.accountId)));
-    const fresh = new Map([...owners].map(([key, ids]) => [key, ids.filter((id) => !toldAlready.has(id))] as const));
-    out.push(...mentionNotifications(event, fresh, ctx));
+    try {
+      /* Whoever already hears about this message as a thread reply isn't told twice. */
+      const toldAlready = new Set(reply?.audience ?? []);
+      const owners = await ticketOwners(keys, new Set(users.map((user) => user.accountId)));
+      const fresh = new Map([...owners].map(([key, ids]) => [key, ids.filter((id) => !toldAlready.has(id))] as const));
+      out.push(...mentionNotifications(event, fresh, ctx));
+    } catch (error) {
+      /* A Jira hiccup on the mention lookup must not cost the thread reply notification built above. */
+      console.warn("Couldn't resolve the owners of tickets mentioned in Slack; keeping the reply notification.", error instanceof Error ? error.message : error);
+    }
   }
 
   return addNotifications(out);

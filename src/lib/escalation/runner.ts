@@ -17,6 +17,7 @@ import {
   getRunnerConfig,
   getSent,
   getShadowChannel,
+  loadEpisodeFloors,
   loadRecords,
   markSent,
   parentsOpenedOn,
@@ -195,7 +196,7 @@ async function runLocked(base: RunSummary, config: RunnerConfig, shadowChannel: 
   const groups = new Map<string, EscalationGroup>(
     sweep.classification.escalations.filter((group) => group.routing.podOptionId === PILOT_POD_OPTION_ID).map((group) => [group.cp.key, group]),
   );
-  const records = await loadRecords();
+  const [records, episodeFloors] = await Promise.all([loadRecords(), loadEpisodeFloors()]);
 
   /* Which TS tickets are in Waiting for product on each CP, whatever the CP's outcome - the state
      machine's WfP membership. A shipped CP drops out of the groups, but its tickets haven't left. */
@@ -270,6 +271,7 @@ async function runLocked(base: RunSummary, config: RunnerConfig, shadowChannel: 
       attachedTsStates,
       cp: cps.get(cpKey) ?? null,
       cpKey,
+      episodeFloor: episodeFloors.get(cpKey),
       group,
       now: nowIso,
       planned,
@@ -351,15 +353,14 @@ async function runLocked(base: RunSummary, config: RunnerConfig, shadowChannel: 
         }
         if (message.kind === "parent") {
           record.permalink = permalink;
+          /* Only a parent actually posted now counts toward the caps - one recovered from the ledger already did. */
+          openedThisRun += 1;
+          openedToday += 1;
+          await countParentOpened(day);
         }
       }
 
       record = applyEffect(record, message, ref, nowIso);
-      if (message.kind === "parent") {
-        openedThisRun += 1;
-        openedToday += 1;
-        await countParentOpened(day);
-      }
     }
 
     await saveRecord(record);

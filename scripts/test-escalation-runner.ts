@@ -105,7 +105,7 @@ function run(
   now: string,
   snapshot: CpSnapshot | null,
   waiting: TsSnapshot[],
-  opts: { attached?: CurrentObservation["attachedTsStates"]; goLiveAt?: string } = {},
+  opts: { attached?: CurrentObservation["attachedTsStates"]; episodeFloor?: number; goLiveAt?: string } = {},
 ): Outbound[] {
   const outcome = snapshot ? cpOutcome(snapshot) : null;
   const group: EscalationGroup | null =
@@ -128,6 +128,7 @@ function run(
     attachedTsStates: attached,
     cp: snapshot,
     cpKey: "CP-7",
+    episodeFloor: opts.episodeFloor,
     group,
     now,
     planned,
@@ -256,6 +257,24 @@ function testHandBackAndReopen(): void {
   console.log("PASS");
 }
 
+function testReturnAfterRecordDropped(): void {
+  console.log("\n--- Test: a CP back after its finished record was dropped gets a new thread, not a silent replay ---");
+  const sim = newSim();
+  const ticket = ts("TS-1", at(-10));
+  run(sim, at(0), OPEN(), [ticket]);
+  run(sim, at(1), RELEASED(), [ticket]);
+  run(sim, at(2), RELEASED(), [ticket]);
+  assertEqual(sim.record?.state, "resolved", "first episode resolved");
+
+  /* A month later the record is dropped; the 180-day sent ledger still holds CP-7:e1:*. */
+  sim.record = null;
+  const back = run(sim, at(800), OPEN(), [ts("TS-1", at(799))], { episodeFloor: 1 });
+  assertEqual(kinds(back), ["parent:e2:parent"], "numbering continues at episode 2, so the parent really posts");
+  /* run() replaced sim.record; TS still narrows it to the null assigned above. */
+  assertEqual((sim.record as EscalationRecord | null)?.episode, 2, "episode 2");
+  console.log("PASS");
+}
+
 function testAckedKeepsLadder(): void {
   console.log("\n--- Test: an acknowledged escalation keeps its ladder and posts nothing for the ack itself ---");
   const sim = newSim();
@@ -313,6 +332,7 @@ try {
   testBacklogTimedFromGoLive();
   testFixReadyAtFirstSight();
   testHandBackAndReopen();
+  testReturnAfterRecordDropped();
   testAckedKeepsLadder();
   testUnreadableAndRetry();
   testDecideGuards();

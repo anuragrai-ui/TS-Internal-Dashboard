@@ -13,6 +13,8 @@ import type { EscalationState, StoredEscalation } from "@/lib/escalation/stateMa
  * - esc:config            mode ("off" | "shadow"), go-live time, who switched it on
  * - esc:record:<cpKey>    one escalation: the state machine's record plus its Slack thread
  * - esc:tracked           set of CP keys with a record
+ * - esc:episodes          highest episode ever used per CP - outlives the records, so a CP that
+ *                         comes back after its record was dropped starts a fresh episode
  * - esc:ack:<cp>:<ep>     a ✅ acknowledgement for one episode, written by the Slack event handler
  * - esc:sent:<dedupeKey>  every message ever posted, so a retry never posts twice
  * - esc:parents:<date>    new threads opened that day (ET), for the daily cap
@@ -80,6 +82,7 @@ export interface RunSummary {
 
 const CONFIG_KEY = "esc:config";
 const TRACKED_KEY = "esc:tracked";
+const EPISODES_KEY = "esc:episodes";
 const LOCK_KEY = "esc:run:lock";
 const THROTTLE_KEY = "esc:run:throttle";
 const LAST_RUN_KEY = "esc:run:last";
@@ -169,6 +172,17 @@ export async function saveRecord(record: EscalationRecord): Promise<void> {
   const redis = getRedis();
   await redis.set(recordKey(record.cpKey), record);
   await redis.sadd(TRACKED_KEY, record.cpKey);
+  /* Episodes only ever go up per CP, so the latest save is the highest. */
+  await redis.hset(EPISODES_KEY, { [record.cpKey]: record.episode });
+}
+
+/* Dedupe keys (esc:sent, kept 180 days) and acks embed the episode; numbering must never restart. */
+export async function loadEpisodeFloors(): Promise<Map<string, number>> {
+  if (!isRedisConfigured()) {
+    return new Map();
+  }
+  const all = (await getRedis().hgetall<Record<string, number | string>>(EPISODES_KEY)) ?? {};
+  return new Map(Object.entries(all).map(([cpKey, episode]) => [cpKey, Number(episode) || 0]));
 }
 
 export async function forgetRecord(cpKey: string): Promise<void> {

@@ -19,11 +19,12 @@ import type { AppNotification, NotificationPage, NotificationView } from "@/lib/
  */
 
 const ITEM_TTL_SECONDS = 14 * 86_400;
+const ITEM_TTL_MS = ITEM_TTL_SECONDS * 1000;
 const FEED_TTL_SECONDS = 30 * 86_400;
 const MAX_READER_FEED = 300;
 const MAX_TEAM_FEED = 500;
-/* The badge stops counting here (shown as 99+), which also bounds the read-state check to one round trip. */
-const MAX_UNREAD_SCAN = 100;
+/* The whole feed fits in one read-state check, so the badge is exact (it shows 99+ from 100 up). */
+const MAX_UNREAD_SCAN = MAX_READER_FEED;
 export const MAX_PAGE_SIZE = 50;
 
 export const TEAM_SCOPE = "team";
@@ -60,6 +61,8 @@ export interface FeedRedis {
   zrevrange(key: string, opts: { above?: number; below?: number; count: number }): Promise<ScoredMember[]>;
   /* Keeps only the `keep` highest-scored members. */
   ztrim(key: string, keep: number): Promise<void>;
+  /* Drops members scored at or below `maxScore`. */
+  ztrimBelow(key: string, maxScore: number): Promise<void>;
 }
 
 function itemKey(id: string): string {
@@ -138,6 +141,9 @@ export function upstashFeedRedis(): FeedRedis {
     ztrim: async (key, keep) => {
       await redis.zremrangebyrank(key, 0, -(keep + 1));
     },
+    ztrimBelow: async (key, maxScore) => {
+      await redis.zremrangebyscore(key, "-inf", maxScore);
+    },
   };
 }
 
@@ -187,6 +193,8 @@ export async function addNotifications(
 
   await Promise.all(
     [...touched].map(async (scope) => {
+      /* Entries whose item has expired would otherwise linger (and count as unread) until trimmed by size. */
+      await store.ztrimBelow(feedKey(scope), nowMs - ITEM_TTL_MS);
       await store.ztrim(feedKey(scope), scope === TEAM_SCOPE ? MAX_TEAM_FEED : MAX_READER_FEED);
       await store.expire(feedKey(scope), FEED_TTL_SECONDS);
       await store.incr(versionKey(scope));
@@ -202,14 +210,18 @@ async function readerCursor(store: FeedRedis, accountId: string): Promise<number
   return Number.isFinite(cursor) ? cursor : 0;
 }
 
-/** Unread items in the reader's own feed, capped at MAX_UNREAD_SCAN. */
-export async function getUnreadCount(accountId: string, store: FeedRedis | null = defaultStore()): Promise<number> {
+/**
+ * Unread items in the reader's own feed. Only entries younger than the item
+ * TTL count: an older one's item is gone (it can't be shown), and so may be
+ * the read marks that covered it.
+ */
+export async function getUnreadCount(accountId: string, store: FeedRedis | null = defaultStore(), nowMs: number = Date.now()): Promise<number> {
   if (!store) {
     return 0;
   }
 
   const cursor = await readerCursor(store, accountId);
-  const entries = await store.zrevrange(feedKey(accountId), { above: cursor, count: MAX_UNREAD_SCAN });
+  const entries = await store.zrevrange(feedKey(accountId), { above: Math.max(cursor, nowMs - ITEM_TTL_MS), count: MAX_UNREAD_SCAN });
 
   if (entries.length === 0) {
     return 0;
@@ -245,7 +257,7 @@ export async function getFeedVersion(
 
 export async function listNotifications(
   accountId: string,
-  opts: { before?: number; limit?: number; scope?: FeedScope } = {},
+  opts: { before?: number; limit?: number; nowMs?: number; scope?: FeedScope } = {},
   store: FeedRedis | null = defaultStore(),
 ): Promise<NotificationPage> {
   const scope = opts.scope ?? "mine";
@@ -269,7 +281,7 @@ export async function listNotifications(
       readIdsKey(accountId),
       page.map((entry) => entry.member),
     ),
-    getUnreadCount(accountId, store),
+    getUnreadCount(accountId, store, opts.nowMs),
   ]);
 
   const expired = page.filter((_entry, index) => !items[index]).map((entry) => entry.member);
@@ -297,6 +309,7 @@ export async function markNotificationsRead(
   accountId: string,
   target: { all: true } | { ids: string[] },
   store: FeedRedis | null = defaultStore(),
+  nowMs: number = Date.now(),
 ): Promise<number> {
   if (!store) {
     return 0;
@@ -317,5 +330,5 @@ export async function markNotificationsRead(
   }
 
   await store.incr(versionKey(accountId));
-  return getUnreadCount(accountId, store);
+  return getUnreadCount(accountId, store, nowMs);
 }

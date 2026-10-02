@@ -48,7 +48,12 @@ export interface SlackChannelCheck {
 }
 
 export interface SlackConnectionReport {
+  /* How the bot appears in Slack - what to search for in "Add apps" / /invite. */
+  appId?: string;
+  appName?: string;
+  botDisplayName?: string;
   botId?: string;
+  botRealName?: string;
   channels: SlackChannelCheck[];
   connector: string;
   error?: string;
@@ -144,9 +149,27 @@ export async function checkSlackConnection(): Promise<SlackConnectionReport> {
       }),
     );
 
+    /* users:read is granted; bots.info needs it too. Best-effort - a failure here never fails the check. */
+    const [userInfo, botInfo] = await Promise.all([
+      auth.user_id
+        ? fetch(`https://slack.com/api/users.info?user=${encodeURIComponent(auth.user_id)}`, { headers, signal: AbortSignal.timeout(10_000) })
+            .then((r) => r.json() as Promise<{ ok: boolean; user?: { profile?: { display_name?: string; real_name?: string } } }>)
+            .catch(() => null)
+        : null,
+      auth.bot_id
+        ? fetch(`https://slack.com/api/bots.info?bot=${encodeURIComponent(auth.bot_id)}`, { headers, signal: AbortSignal.timeout(10_000) })
+            .then((r) => r.json() as Promise<{ bot?: { app_id?: string; name?: string }; ok: boolean }>)
+            .catch(() => null)
+        : null,
+    ]);
+
     return {
       ...base,
+      appId: botInfo?.ok ? botInfo.bot?.app_id : undefined,
+      appName: botInfo?.ok ? botInfo.bot?.name : undefined,
+      botDisplayName: userInfo?.ok ? userInfo.user?.profile?.display_name : undefined,
       botId: auth.bot_id,
+      botRealName: userInfo?.ok ? userInfo.user?.profile?.real_name : undefined,
       channels,
       ok: true,
       scopes,

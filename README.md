@@ -507,6 +507,18 @@ npm run test:oncall
 npm run test:webmcp
 ```
 
+## Case Store (Postgres, pilot: Credentialing)
+
+The first step toward owning the system of record instead of Jira. A Neon Postgres database (`DATABASE_URL`, added through the Vercel Marketplace) holds a copy of every Credentialing TS Support Ticket: cases, accounts, contacts, every comment (customer-visible and internal kept apart), status/assignee/priority history, links and our own SLA clocks. Jira stays authoritative until a cutover is decided.
+
+- Schema and migrations: `src/lib/db/` - applied automatically on first use (one transaction per migration, under an advisory lock).
+- Sync: `src/lib/cases/jiraSync.ts` - a 90-day backfill, then incremental by `updated`; runs from the bell's poll at most every 2 minutes (or "Sync now" on `/cases`), idempotent, never throws.
+- SLA: `src/lib/cases/sla.ts` computes first response and time to resolution on the Mon-Fri 9-18 ET calendar, pausing in Waiting for product / waiting-for-customer statuses, and stores them next to Jira's numbers. `/cases` shows the parity table - our clock must agree with Jira's before it can replace it.
+
+```bash
+npm run test:cases
+```
+
 ## UI Design & Theming
 
 The interface is a Kibana/Jira-inspired enterprise operations console, not a marketing-style admin template:

@@ -1,3 +1,5 @@
+import { ATTENTION_KIND_LABEL, attentionRank, attentionReasons } from "@/lib/tracker/attention";
+
 import type { SignalKind, SignalTier, TrackerPriority, TrackerSla, TrackerTicket, WhoseMove } from "@/lib/tracker/types";
 
 /**
@@ -67,6 +69,7 @@ export type TrackerViewId =
   | "manual"
   | "medium_wfp"
   | "mine"
+  | "needs_attention"
   | "slack_active"
   | "unassigned";
 
@@ -113,6 +116,13 @@ function closedWithin(ticket: TrackerTicket, now: number, windowMs: number): boo
 }
 
 export const TRACKER_VIEWS: TrackerViewDef[] = [
+  {
+    emptyText: "Nothing needs attention right now: no breaching clocks, unowned or idle High/Critical tickets, or hand-backs from engineering.",
+    id: "needs_attention",
+    label: "Needs attention",
+    matches: (ticket, context) => attentionReasons(ticket, context.now).length > 0,
+    section: "Inbox",
+  },
   {
     emptyText: "Nothing assigned to you or followed by you is open. Follow a ticket from its detail panel to keep it here.",
     id: "mine",
@@ -230,6 +240,8 @@ export interface TrackerFilters {
   assignee: string[];
   pod: string[];
   priority: string[];
+  /* Why it needs attention (src/lib/tracker/attention.ts). */
+  reason: string[];
   signal: string[];
 }
 
@@ -240,10 +252,11 @@ export const FILTER_FACETS: Array<{ facet: FilterFacet; label: string }> = [
   { facet: "pod", label: "Pod" },
   { facet: "assignee", label: "Assignee" },
   { facet: "account", label: "Account" },
+  { facet: "reason", label: "Attention" },
   { facet: "signal", label: "Signals" },
 ];
 
-export const EMPTY_FILTERS: TrackerFilters = { account: [], assignee: [], pod: [], priority: [], signal: [] };
+export const EMPTY_FILTERS: TrackerFilters = { account: [], assignee: [], pod: [], priority: [], reason: [], signal: [] };
 
 export interface FacetOption {
   count: number;
@@ -252,7 +265,7 @@ export interface FacetOption {
 }
 
 /* Every value a ticket has for one facet, paired with its display label. */
-function facetEntries(ticket: TrackerTicket, facet: FilterFacet): Array<{ label: string; value: string }> {
+function facetEntries(ticket: TrackerTicket, facet: FilterFacet, now: number): Array<{ label: string; value: string }> {
   switch (facet) {
     case "account":
       return [ticket.account ? { label: ticket.account, value: ticket.account } : { label: "No account", value: NONE_VALUE }];
@@ -262,29 +275,31 @@ function facetEntries(ticket: TrackerTicket, facet: FilterFacet): Array<{ label:
       return [ticket.pod ? { label: ticket.pod, value: ticket.pod } : { label: "No pod", value: NONE_VALUE }];
     case "priority":
       return [{ label: ticket.priority, value: ticket.priority }];
+    case "reason":
+      return attentionReasons(ticket, now).map((reason) => ({ label: ATTENTION_KIND_LABEL[reason.kind], value: reason.kind }));
     case "signal":
       return ticket.signals.map((signal) => ({ label: signal.label, value: signal.kind }));
   }
 }
 
 /* OR within one facet ("Critical or High"), AND across facets ("... and pod Alpha"). */
-export function applyFilters(tickets: TrackerTicket[], filters: TrackerFilters): TrackerTicket[] {
+export function applyFilters(tickets: TrackerTicket[], filters: TrackerFilters, now: number = Date.now()): TrackerTicket[] {
   const active = FILTER_FACETS.filter(({ facet }) => filters[facet].length > 0);
   if (active.length === 0) {
     return tickets;
   }
   return tickets.filter((ticket) =>
-    active.every(({ facet }) => facetEntries(ticket, facet).some((entry) => filters[facet].includes(entry.value))),
+    active.every(({ facet }) => facetEntries(ticket, facet, now).some((entry) => filters[facet].includes(entry.value))),
   );
 }
 
 /* The options a facet menu offers, with how many tickets have each. Priorities keep their natural order; the rest go by count. */
-export function facetOptions(tickets: TrackerTicket[], facet: FilterFacet): FacetOption[] {
+export function facetOptions(tickets: TrackerTicket[], facet: FilterFacet, now: number = Date.now()): FacetOption[] {
   const byValue = new Map<string, FacetOption>();
   for (const ticket of tickets) {
     /* A ticket can carry the same signal kind twice (two Slack threads); count it once. */
     const seen = new Set<string>();
-    for (const entry of facetEntries(ticket, facet)) {
+    for (const entry of facetEntries(ticket, facet, now)) {
       if (seen.has(entry.value)) {
         continue;
       }
@@ -327,9 +342,10 @@ export function matchesSearch(ticket: TrackerTicket, query: string): boolean {
 
 /* ------------------------------------------------------------------- sort */
 
-export type TrackerSortId = "activity" | "created" | "priority" | "sla";
+export type TrackerSortId = "activity" | "attention" | "created" | "priority" | "sla";
 
 export const SORT_OPTIONS: Array<{ id: TrackerSortId; label: string }> = [
+  { id: "attention", label: "Needs attention first" },
   { id: "sla", label: "SLA urgency" },
   { id: "priority", label: "Priority" },
   { id: "activity", label: "Last activity" },
@@ -337,6 +353,11 @@ export const SORT_OPTIONS: Array<{ id: TrackerSortId; label: string }> = [
 ];
 
 export const DEFAULT_SORT_ID: TrackerSortId = "sla";
+
+/* The Needs attention view reads top-down by urgency; every other view keeps the SLA order unless the URL says otherwise. */
+export function defaultSortFor(view: TrackerViewId): TrackerSortId {
+  return view === "needs_attention" ? "attention" : DEFAULT_SORT_ID;
+}
 
 export function isTrackerSortId(value: string | null | undefined): value is TrackerSortId {
   return SORT_OPTIONS.some((option) => option.id === value);
@@ -386,15 +407,22 @@ function compareKey(a: TrackerTicket, b: TrackerTicket): number {
   return a.key.localeCompare(b.key, "en", { numeric: true });
 }
 
-export const SORT_COMPARATORS: Record<TrackerSortId, (a: TrackerTicket, b: TrackerTicket) => number> = {
+export const SORT_COMPARATORS: Record<Exclude<TrackerSortId, "attention">, (a: TrackerTicket, b: TrackerTicket) => number> = {
   activity: (a, b) => compareActivity(a, b) || comparePriority(a, b) || compareKey(a, b),
   created: (a, b) => timeOf(b.created) - timeOf(a.created) || compareKey(a, b),
   priority: (a, b) => comparePriority(a, b) || compareSla(a.ttr, b.ttr) || compareActivity(a, b) || compareKey(a, b),
   sla: (a, b) => compareSla(a.ttr, b.ttr) || comparePriority(a, b) || compareActivity(a, b) || compareKey(a, b),
 };
 
-export function sortTickets(tickets: TrackerTicket[], sort: TrackerSortId): TrackerTicket[] {
-  return [...tickets].sort(SORT_COMPARATORS[sort]);
+/* Most urgent reason first, then the same tie-breaks as the SLA order. Each ticket's reasons are worked out once, not per comparison. */
+function sortByAttention(tickets: TrackerTicket[], now: number): TrackerTicket[] {
+  const rank = new Map(tickets.map((ticket) => [ticket.key, attentionRank(ticket, now)] as const));
+  const rankOf = (ticket: TrackerTicket): number => rank.get(ticket.key) ?? Number.POSITIVE_INFINITY;
+  return [...tickets].sort((a, b) => rankOf(a) - rankOf(b) || comparePriority(a, b) || SORT_COMPARATORS.sla(a, b));
+}
+
+export function sortTickets(tickets: TrackerTicket[], sort: TrackerSortId, now: number = Date.now()): TrackerTicket[] {
+  return sort === "attention" ? sortByAttention(tickets, now) : [...tickets].sort(SORT_COMPARATORS[sort]);
 }
 
 /* ------------------------------------------------------------ pipeline */
@@ -410,8 +438,8 @@ export interface TrackerQuery {
 export function selectTickets(tickets: TrackerTicket[], query: TrackerQuery, context: ViewContext): TrackerTicket[] {
   const view = getView(query.view);
   const inView = tickets.filter((ticket) => view.matches(ticket, context));
-  const searched = applyFilters(inView, query.filters).filter((ticket) => matchesSearch(ticket, query.search));
-  return sortTickets(searched, query.sort);
+  const searched = applyFilters(inView, query.filters, context.now).filter((ticket) => matchesSearch(ticket, query.search));
+  return sortTickets(searched, query.sort, context.now);
 }
 
 export interface TicketGroup {

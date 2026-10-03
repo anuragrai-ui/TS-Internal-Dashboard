@@ -1,11 +1,14 @@
 "use client";
 
 import { Icon } from "@/components/Icon";
-import { Avatar, CpChips, PriorityText, SlackIndicator, SlaChipView, WhoseMoveRing } from "@/components/tracker/TrackerBits";
+import { AttentionChips, Avatar, CpChips, PriorityText, SlackIndicator, SlaChipView, WhoseMoveRing } from "@/components/tracker/TrackerBits";
 import { readState, relativeTime } from "@/lib/tracker/views";
 
+import type { AttentionReason } from "@/lib/tracker/attention";
 import type { TrackerTicket, WhoseMove } from "@/lib/tracker/types";
 import type { TicketGroup } from "@/lib/tracker/views";
+
+const NO_REASONS: readonly AttentionReason[] = [];
 
 export function trackerRowId(key: string): string {
   return `trk-row-${key}`;
@@ -22,12 +25,14 @@ interface TrackerRowProps {
   now: number;
   onOpen: (key: string) => void;
   open: boolean;
+  /* Why it is in the Needs attention view; empty elsewhere. */
+  reasons: readonly AttentionReason[];
   seen: Readonly<Record<string, string>>;
   tabbable: boolean;
   ticket: TrackerTicket;
 }
 
-function TrackerRow({ cursor, now, onOpen, open, seen, tabbable, ticket }: TrackerRowProps): React.ReactElement {
+function TrackerRow({ cursor, now, onOpen, open, reasons, seen, tabbable, ticket }: TrackerRowProps): React.ReactElement {
   const read = readState(ticket, seen);
   return (
     <div
@@ -53,9 +58,12 @@ function TrackerRow({ cursor, now, onOpen, open, seen, tabbable, ticket }: Track
       <span className="trk-col-key">{ticket.key}</span>
       <span className="trk-col-summary">
         <span className="trk-summary">{ticket.summary}</span>
-        <span className="trk-account">
-          <span className="trk-key-inline">{ticket.key} · </span>
-          {ticket.account ?? "No account"}
+        <span className="trk-subline">
+          <span className="trk-account">
+            <span className="trk-key-inline">{ticket.key} · </span>
+            {ticket.account ?? "No account"}
+          </span>
+          <AttentionChips reasons={reasons} />
         </span>
       </span>
       <span className="trk-col-status">
@@ -91,11 +99,13 @@ interface TrackerListProps {
   openKey: string | null;
   /* The keys of the rows actually on screen (collapsed bands and filtered-out tickets excluded). */
   renderedKeys: readonly string[];
+  /* Reasons per ticket key - passed only in the Needs attention view. */
+  reasons?: ReadonlyMap<string, readonly AttentionReason[]>;
   seen: Readonly<Record<string, string>>;
 }
 
 /* Bands per whose move (collapsible), each a listbox of ~44px rows; j/k and Enter are handled by the workspace. */
-export function TrackerList({ collapsed, cursorKey, groups, now, onOpen, onToggleGroup, openKey, renderedKeys, seen }: TrackerListProps): React.ReactElement {
+export function TrackerList({ collapsed, cursorKey, groups, now, onOpen, onToggleGroup, openKey, reasons, renderedKeys, seen }: TrackerListProps): React.ReactElement {
   const tabbableKey = tabbableRowKey(renderedKeys, cursorKey, openKey);
 
   return (
@@ -124,6 +134,7 @@ export function TrackerList({ collapsed, cursorKey, groups, now, onOpen, onToggl
                     now={now}
                     onOpen={onOpen}
                     open={ticket.key === openKey}
+                    reasons={reasons?.get(ticket.key) ?? NO_REASONS}
                     seen={seen}
                     tabbable={ticket.key === tabbableKey}
                     ticket={ticket}

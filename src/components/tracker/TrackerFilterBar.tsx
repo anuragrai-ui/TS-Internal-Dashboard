@@ -9,15 +9,17 @@ import type { FilterFacet, TrackerFilters } from "@/lib/tracker/views";
 
 interface TrackerFilterBarProps {
   filters: TrackerFilters;
+  /* Attention reasons depend on the time, so the menus count them as of the page's clock. */
+  now: number;
   onChange: (filters: TrackerFilters) => void;
   /* The tickets in the current view, before filters - what the menus offer and count. */
   tickets: TrackerTicket[];
 }
 
 /* Facet menus on the left; applied filters as lavender "Priority is Critical ×" chips, then Reset. */
-export function TrackerFilterBar({ filters, onChange, tickets }: TrackerFilterBarProps): React.ReactElement {
+export function TrackerFilterBar({ filters, now, onChange, tickets }: TrackerFilterBarProps): React.ReactElement {
   const labelFor = (facet: FilterFacet, value: string): string =>
-    facetOptions(tickets, facet).find((option) => option.value === value)?.label ?? value;
+    facetOptions(tickets, facet, now).find((option) => option.value === value)?.label ?? value;
 
   return (
     <div className="trk-filterbar">
@@ -26,7 +28,7 @@ export function TrackerFilterBar({ filters, onChange, tickets }: TrackerFilterBa
           <Icon name="layers" size={13} />
         </span>
         {FILTER_FACETS.map(({ facet, label }) => {
-          const options = facetOptions(tickets, facet);
+          const options = facetOptions(tickets, facet, now);
           const selected = filters[facet];
           return (
             <TrackerMenu

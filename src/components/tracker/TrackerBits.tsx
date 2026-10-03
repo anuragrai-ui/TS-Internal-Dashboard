@@ -1,6 +1,7 @@
 import { Icon } from "@/components/Icon";
 import { initials, slaChip, WHOSE_MOVE_LABEL } from "@/lib/tracker/views";
 
+import type { AttentionReason } from "@/lib/tracker/attention";
 import type { CpOutcomeLabel, TrackerCp, TrackerPriority, TrackerSla, TrackerTicket, WhoseMove } from "@/lib/tracker/types";
 
 /*
@@ -127,6 +128,29 @@ export function SlackIndicator({ ticket }: { ticket: TrackerTicket }): React.Rea
       <Icon name="message" size={13} />
       {conversations}
       {activeConversations > 0 ? <span aria-hidden="true" className="trk-slack-dot" /> : null}
+    </span>
+  );
+}
+
+/* Why a ticket needs attention: the most urgent reasons as chips, the rest folded into "+N" (all of them in the tooltip). */
+export function AttentionChips({ max = 2, reasons }: { max?: number; reasons: readonly AttentionReason[] }): React.ReactElement | null {
+  if (reasons.length === 0) {
+    return null;
+  }
+  const shown = reasons.slice(0, max);
+  const hidden = reasons.slice(max);
+  return (
+    <span className="trk-reasons">
+      {shown.map((reason) => (
+        <span className="trk-reason" data-tone={reason.tone} key={reason.kind} title={reason.detail}>
+          {reason.label}
+        </span>
+      ))}
+      {hidden.length > 0 ? (
+        <span className="trk-reason" data-tone="more" title={hidden.map((reason) => `${reason.label}: ${reason.detail}`).join("\n")}>
+          +{hidden.length}
+        </span>
+      ) : null}
     </span>
   );
 }

@@ -1,10 +1,11 @@
 "use client";
 
 import { Icon } from "@/components/Icon";
-import { Avatar, PriorityText, SlackIndicator, SlaChipView, WhoseMoveRing } from "@/components/tracker/TrackerBits";
+import { AttentionChips, Avatar, PriorityText, SlackIndicator, SlaChipView, WhoseMoveRing } from "@/components/tracker/TrackerBits";
 import { tabbableRowKey, trackerRowId } from "@/components/tracker/TrackerList";
 import { readState, WHOSE_MOVE_LABEL, WHOSE_MOVE_ORDER } from "@/lib/tracker/views";
 
+import type { AttentionReason } from "@/lib/tracker/attention";
 import type { TicketGroup } from "@/lib/tracker/views";
 
 interface TrackerBoardProps {
@@ -14,6 +15,8 @@ interface TrackerBoardProps {
   openKey: string | null;
   /* The keys of the cards actually on screen, in board order. */
   renderedKeys: readonly string[];
+  /* Reasons per ticket key - passed only in the Needs attention view. */
+  reasons?: ReadonlyMap<string, readonly AttentionReason[]>;
   seen: Readonly<Record<string, string>>;
 }
 
@@ -21,7 +24,7 @@ interface TrackerBoardProps {
  * One column per whose-move state. Unlike the list, empty columns stay so the
  * board keeps its shape; Closed only appears when the view has closed tickets.
  */
-export function TrackerBoard({ cursorKey, groups, onOpen, openKey, renderedKeys, seen }: TrackerBoardProps): React.ReactElement {
+export function TrackerBoard({ cursorKey, groups, onOpen, openKey, reasons, renderedKeys, seen }: TrackerBoardProps): React.ReactElement {
   const columns = WHOSE_MOVE_ORDER.filter((move) => move !== "closed" || groups.some((group) => group.whoseMove === "closed"));
   const tabbableKey = tabbableRowKey(renderedKeys, cursorKey, openKey);
 
@@ -63,6 +66,7 @@ export function TrackerBoard({ cursorKey, groups, onOpen, openKey, renderedKeys,
                   </div>
                   <div className="trk-card-summary">{ticket.summary}</div>
                   {ticket.account ? <div className="trk-account">{ticket.account}</div> : null}
+                  <AttentionChips max={1} reasons={reasons?.get(ticket.key) ?? []} />
                   <div className="trk-card-foot">
                     <Avatar name={ticket.assignee?.name ?? null} size="sm" />
                     <SlaChipView label="Time to resolution" sla={ticket.ttr} />

@@ -451,6 +451,22 @@ npm run test:notifications
 
 **Whose move:** New (To-do, Triaging), On TS, Waiting on engineering (WfP or an open CP), On operations, On customer (Waiting for client, Blocked - Client), Closed.
 
+**Needs attention** (first view, in the Inbox group) lists every open ticket that is waiting on a person right now, most urgent first, each with chips saying why (hover for the detail; the detail panel lists them all). It is a fixed set of rules in `src/lib/tracker/attention.ts`, not a score:
+
+| Reason | When |
+| --- | --- |
+| SLA breached / at risk | the resolution clock has passed (even while paused in Waiting for product), or has under 8 working hours left |
+| Not picked up | a Critical (4h) or High (8h) ticket still in To-do / Triaging with no activity |
+| Unassigned | a High or Critical ticket with nobody on it |
+| Escalated, still on TS | priority was raised or a comment asks to escalate, but there is no open CP and it isn't in Waiting for product |
+| Fix ready / CP shipped / CP rejected | engineering handed it back (a CP's fix is ready, or every CP is done and the ticket is still Waiting for product) and nobody has touched the ticket for a working day |
+| No CP linked | Waiting for product with no CP, so engineering has nothing to pick up (after a working day) |
+| Slack is active | a Slack conversation about it moved in the last 24 hours (not while waiting on the customer) |
+| Quiet on TS / Engineering quiet | no activity for 1 (Critical) or 2 (High) working days on TS's side; 3 / 5 working days while waiting on engineering |
+| No first response | still New with the first-response target passed |
+
+Quiet times skip weekends. Medium tickets (only tracked because they wait for product) appear only for a breached or closing clock; closed tickets never do. The **Attention** filter narrows the list to one reason, and the "Needs attention first" sort is available in every view (it is this view's default).
+
 **Slack conversations** - the bot can't use Slack search (that needs a user token), so conversations are found four ways and stored as pointers (channel, thread, counts, a short snippet; message text is read live and cached for a minute at most):
 - live message events in every channel the bot is in: any TS/CP key in the text, link URLs, rich-text blocks or attachments links that thread to the ticket, and later replies in the thread count as activity even when they don't repeat the key (a CP key that first appears in a reply attaches to the thread root);
 - Slack permalinks people paste into Jira comments (read during the tracker refresh, at most 25 tickets' comments per refresh);
@@ -467,6 +483,7 @@ Invite the bot (`/invite @ts-internal-dashboard`) to every channel where tickets
 
 ```bash
 npm run test:tracker
+npm run test:tracker-attention
 npm run test:tracker-slack
 npm run test:tracker-views
 ```

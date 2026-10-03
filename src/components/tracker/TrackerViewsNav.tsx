@@ -17,6 +17,7 @@ const VIEW_ICON: Record<TrackerViewId, IconName> = {
   manual: "user",
   medium_wfp: "history",
   mine: "inbox",
+  needs_attention: "bell",
   slack_active: "message",
   unassigned: "user",
 };
@@ -63,7 +64,9 @@ export function TrackerViewsNav({ counts, onSelect, selected }: TrackerViewsNavP
                   <Icon name={VIEW_ICON[view.id]} size={15} />
                 </span>
                 <span className="trk-view-label">{view.label}</span>
-                <span className="trk-view-count">{counts ? counts[view.id] : ""}</span>
+                <span className="trk-view-count" data-urgent={view.id === "needs_attention" && Boolean(counts?.needs_attention)}>
+                  {counts ? counts[view.id] : ""}
+                </span>
               </button>
             ))}
           </div>

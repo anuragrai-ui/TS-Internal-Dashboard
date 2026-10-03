@@ -29,6 +29,7 @@
     "test:slack-test-mode": "npx tsx scripts/test-slack-test-mode.ts",
     "test:theme": "npx tsx scripts/test-theme.ts",
     "test:tracker": "npx tsx scripts/test-tracker.ts",
+    "test:tracker-attention": "npx tsx scripts/test-tracker-attention.ts",
     "test:tracker-slack": "npx tsx scripts/test-tracker-slack.ts",
     "test:tracker-views": "npx tsx scripts/test-tracker-views.ts",
     "test:user-jira-tokens": "npx tsx scripts/test-user-jira-tokens.ts",

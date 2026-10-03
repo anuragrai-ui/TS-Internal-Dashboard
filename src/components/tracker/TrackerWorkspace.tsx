@@ -12,9 +12,10 @@ import { TrackerFilterBar } from "@/components/tracker/TrackerFilterBar";
 import { TrackerHeader } from "@/components/tracker/TrackerHeader";
 import { trackerRowId, TrackerList, TrackerListSkeleton } from "@/components/tracker/TrackerList";
 import { TrackerViewsNav } from "@/components/tracker/TrackerViewsNav";
+import { attentionReasons } from "@/lib/tracker/attention";
 import {
   adjacentKey,
-  DEFAULT_SORT_ID,
+  defaultSortFor,
   DEFAULT_VIEW_ID,
   EMPTY_FILTERS,
   getView,
@@ -127,7 +128,8 @@ export function TrackerWorkspace(): React.ReactElement {
   const urlSearch = searchParams.get("q") ?? "";
   const layout: TrackerLayout = searchParams.get("layout") === "board" ? "board" : "list";
   const sortParam = searchParams.get("sort");
-  const sort: TrackerSortId = isTrackerSortId(sortParam) ? sortParam : DEFAULT_SORT_ID;
+  const defaultSort = defaultSortFor(view);
+  const sort: TrackerSortId = isTrackerSortId(sortParam) ? sortParam : defaultSort;
 
   const [list, setList] = useState<TrackerListResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -262,6 +264,11 @@ export function TrackerWorkspace(): React.ReactElement {
   const inView = useMemo(() => tickets.filter((ticket) => viewDef.matches(ticket, context)), [context, tickets, viewDef]);
   const visible = useMemo(() => selectTickets(tickets, { filters, search, sort, view }, context), [context, filters, search, sort, tickets, view]);
   const groups = useMemo(() => groupByWhoseMove(visible), [visible]);
+  /* Only the Needs attention view spends the chips: why each row is there. */
+  const reasons = useMemo(
+    () => (view === "needs_attention" ? new Map(visible.map((ticket) => [ticket.key, attentionReasons(ticket, now)] as const)) : undefined),
+    [now, view, visible],
+  );
   const keys = useMemo(() => navigableKeys(groups, layout === "board" ? new Set() : collapsed), [collapsed, groups, layout]);
   const openTicket = openKey ? tickets.find((ticket) => ticket.key === openKey) : undefined;
   const openIndex = openKey ? keys.indexOf(openKey) : -1;
@@ -497,7 +504,7 @@ export function TrackerWorkspace(): React.ReactElement {
       </div>
     );
   } else if (layout === "board") {
-    content = <TrackerBoard cursorKey={cursorKey} groups={groups} onOpen={openTicketKey} openKey={openKey} renderedKeys={keys} seen={seen} />;
+    content = <TrackerBoard cursorKey={cursorKey} groups={groups} onOpen={openTicketKey} openKey={openKey} reasons={reasons} renderedKeys={keys} seen={seen} />;
   } else {
     content = (
       <TrackerList
@@ -508,6 +515,7 @@ export function TrackerWorkspace(): React.ReactElement {
         onOpen={openTicketKey}
         onToggleGroup={toggleGroup}
         openKey={openKey}
+        reasons={reasons}
         renderedKeys={keys}
         seen={seen}
       />
@@ -529,14 +537,14 @@ export function TrackerWorkspace(): React.ReactElement {
           onLayoutChange={(next) => writeParams({ layout: next === "list" ? null : next }, "replace")}
           onRefresh={() => void refresh()}
           onSearchChange={setSearch}
-          onSortChange={(next) => writeParams({ sort: next === DEFAULT_SORT_ID ? null : next }, "replace")}
+          onSortChange={(next) => writeParams({ sort: next === defaultSort ? null : next }, "replace")}
           refreshing={refreshing}
           search={search}
           searchRef={searchRef}
           sort={sort}
           title={viewDef.label}
         />
-        <TrackerFilterBar filters={filters} onChange={setFilters} tickets={inView} />
+        <TrackerFilterBar filters={filters} now={now} onChange={setFilters} tickets={inView} />
         {errors.length > 0 ? (
           <div className="trk-banner" role="status">
             <Icon name="alert" size={14} />

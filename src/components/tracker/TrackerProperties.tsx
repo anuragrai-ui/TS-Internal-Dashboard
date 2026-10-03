@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { Avatar, CpOutcomeDot, cpOutcomeLabel, PriorityText, SlaChipView, WhoseMoveLabel } from "@/components/tracker/TrackerBits";
 import { postSlackLink } from "@/components/tracker/trackerApi";
+import { attentionReasons } from "@/lib/tracker/attention";
 import { formatDurationShort, relativeTime, SIGNAL_TIER_LABEL, slaProgress } from "@/lib/tracker/views";
 
 import type { SlackConversationRef, TrackerSla, TrackerTicket } from "@/lib/tracker/types";
@@ -162,8 +163,25 @@ interface TrackerPropertiesProps {
 export function TrackerProperties({ conversations, jiraBaseUrl, now, onLinked, ticket }: TrackerPropertiesProps): React.ReactElement {
   const signalsByTier = ([1, 2, 3] as const).map((tier) => ({ signals: ticket.signals.filter((signal) => signal.tier === tier), tier }));
 
+  const reasons = attentionReasons(ticket, now);
+
   return (
     <div className="trk-props">
+      {reasons.length > 0 ? (
+        <Module title="Needs attention">
+          <ul className="trk-plain-list">
+            {reasons.map((reason) => (
+              <li className="trk-attention-item" data-tone={reason.tone} key={reason.kind}>
+                <span className="trk-reason" data-tone={reason.tone}>
+                  {reason.label}
+                </span>
+                <p className="trk-muted-note">{reason.detail}</p>
+              </li>
+            ))}
+          </ul>
+        </Module>
+      ) : null}
+
       <Module title="SLA">
         <SlaBlock label="Time to resolution" sla={ticket.ttr} />
         <SlaBlock label="First response" sla={ticket.firstResponse} />

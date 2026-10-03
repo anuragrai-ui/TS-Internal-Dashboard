@@ -519,6 +519,36 @@ The first step toward owning the system of record instead of Jira. A Neon Postgr
 npm run test:cases
 ```
 
+## Google connection & email intake
+
+Two one-time Google sign-ins, made from the dashboard by an identified user and stored server-side (refresh token encrypted with `TOKEN_ENCRYPTION_KEY`, in Redis under `google:conn:<purpose>`). Code: `src/lib/google/oauth.ts`, routes `/api/google/connect|callback|disconnect|status`.
+
+- **Calendar** (`calendar.readonly`): the on-call rotation lives in the certifyos.com Workspace with no iCal address, so `/oncall` reads it through the Google Calendar API (`src/lib/oncall/googleCalendar.ts`). Source order: the Google API when the calendar connection exists and `ONCALL_GOOGLE_CALENDAR_ID` is set, else `ONCALL_CALENDAR_ICAL_URL`, else "not configured". Connect it with **Connect Google Calendar** on `/oncall`, signed in as any certifyos.com account that can see the calendar.
+- **Support mailbox** (`gmail.readonly` + `gmail.send`): `/inbox` reads customer email from the support Gmail inbox into the case store (`src/lib/email/*`) and replies from it. Connect it with **Connect support mailbox** on `/inbox`, signed in as `SUPPORT_MAILBOX_ADDRESS` itself (any other account is refused).
+
+Email intake runs from the bell's poll (at most every 2 minutes, ~35s budget, or "Sync now"): the first run reads `in:inbox newer_than:14d`, then Gmail's history from the saved id (re-reading the 14 days if that history expired). It skips our own mail, Jira/Atlassian notifications, auto-replies and bounces; a known thread is appended to its case; a message naming a stored TS ticket (`[JIRA] (TS-123)`, `TS-123`) is appended to that Jira case; anything else becomes an email case (`cases.source = 'email'`, keyed `EM-<10 hex>` until linked to a TS ticket). Messages are stored and shown as plain text only. Replies go through the same action pipeline as Jira replies (leak check, idempotency, rate limit, audit) as `email_reply`.
+
+**IT setup (once):**
+
+1. In the certifyos.com Google Cloud organization, create (or pick) a project and set its **OAuth consent screen** to **Internal**.
+2. Enable the **Google Calendar API** and the **Gmail API** in that project.
+3. Create an **OAuth client** of type **Web application** with the authorized redirect URI `https://ts-internal-dashboard.vercel.app/api/google/callback` (or `<APP_BASE_URL>/api/google/callback` for another deployment).
+4. In Vercel, set:
+   - `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` (mark both **Sensitive**)
+   - `ONCALL_GOOGLE_CALENDAR_ID` - the rotation calendar's id (Calendar settings → Integrate calendar → Calendar ID)
+   - `SUPPORT_MAILBOX_ADDRESS` - e.g. `support@certifyos.com`
+   - optional `EMAIL_SEND_ENABLED=true` - replies stay off (shadow mode) until this is set
+   - optional `EMAIL_TEST_RECIPIENT` - while set, every reply goes to this address instead of the customer
+   - already required: `TOKEN_ENCRYPTION_KEY`, Upstash Redis, `DATABASE_URL`
+5. Redeploy, then connect the calendar on `/oncall` and the mailbox on `/inbox`.
+
+Until the support address stops forwarding to Jira Service Management, JSM keeps creating TS tickets from the same emails; intake links them when the mail names the TS key, and a person can link the rest with **Link to Jira ticket**.
+
+```bash
+npm run test:google
+npm run test:email
+```
+
 ## UI Design & Theming
 
 The interface is a Kibana/Jira-inspired enterprise operations console, not a marketing-style admin template:

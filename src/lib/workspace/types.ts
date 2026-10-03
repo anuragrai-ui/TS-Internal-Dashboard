@@ -4,9 +4,11 @@
  * workspace"). Jira and Slack stay the systems of record for now; this phase
  * adds, on top of what the dashboard already has:
  *
- * - On-call: who is firefighter right now (Asia/Europe + US), read from a
- *   shared Google Calendar's secret iCal address (ONCALL_CALENDAR_ICAL_URL),
- *   plus a live feed of the #firefighters Slack channel.
+ * - On-call: who is firefighter right now (Asia/Europe + US), read from the
+ *   rotation's Google Calendar through the Google Calendar API (a one-time
+ *   Google sign-in, src/lib/google/oauth.ts) or, failing that, its secret
+ *   iCal address (ONCALL_CALENDAR_ICAL_URL), plus a live feed of the
+ *   #firefighters Slack channel.
  *     src/lib/oncall/*          getOnCall(), getCurrentOnCallShifts()
  *     src/lib/firefighters/*    getFirefighterFeed()
  * - Write-back actions: everything a person does to a ticket from the
@@ -59,8 +61,10 @@ export interface OnCallShift {
 }
 
 export interface OnCallResponse {
-  /* False until ONCALL_CALENDAR_ICAL_URL is set in Vercel. */
+  /* False until a source is set up: the Google Calendar connection plus ONCALL_GOOGLE_CALENDAR_ID, or ONCALL_CALENDAR_ICAL_URL. */
   configured: boolean;
+  /* Where the schedule came from: the Google Calendar API (preferred) or the secret iCal address. */
+  source?: "google" | "ical";
   /* The moment `now`/`next` are computed for (ISO). */
   at: string;
   /* Shifts covering `at` - usually one per region. */
@@ -107,6 +111,7 @@ export interface FirefighterFeedResponse {
 /* ================================================================ actions */
 
 export type ActionOperation =
+  | "email_reply"
   | "firefighter_escalation"
   | "jira_assign"
   | "jira_comment"
@@ -127,7 +132,15 @@ export type ActionArgs =
   /* Only into a Slack conversation the tracker has linked to this ticket (or one of its CPs). */
   | { body: string; channel: string; operation: "slack_thread_reply"; threadTs: string }
   /* A new message in #firefighters about this ticket; mentionOnCall tags whoever is on call now. */
-  | { body: string; mentionOnCall: boolean; operation: "firefighter_escalation" };
+  | { body: string; mentionOnCall: boolean; operation: "firefighter_escalation" }
+  /*
+   * A reply from the support mailbox to the customer on an email case (src/lib/email/reply.ts), in the
+   * Gmail thread of the customer's latest message. Customer-visible, so it gets the strict leak check.
+   * The action's ticketKey is the case's own key (see emailCaseKey): its Jira key once the case is
+   * linked to a TS ticket, otherwise "EM-" plus the first 10 hex digits of the case uuid (EM-1A2B3C4D5E).
+   * caseId is the uuid itself, and must belong to that key - so an audit line always names the case.
+   */
+  | { body: string; caseId: string; operation: "email_reply" };
 
 export interface ActionDraft {
   args: ActionArgs;
@@ -186,7 +199,7 @@ export interface ActionExecution {
   id: string;
   idempotencyKey: string;
   proposalId?: string;
-  /* Slack test mode sent it to the test channel instead (mentions defused). */
+  /* Slack test mode sent it to the test channel instead (mentions defused); for email_reply, EMAIL_TEST_RECIPIENT got it instead of the customer. */
   redirectedToTestChannel?: boolean;
   status: ExecutionStatus;
   ticketKey: string;
@@ -339,6 +352,111 @@ export interface PrepareReplyDetail {
 
 export interface ProposalsChangedDetail {
   ticketKey: string;
+}
+
+/* ====================================================== Google connection */
+
+/*
+ * One stored Google sign-in per purpose (src/lib/google/oauth.ts): "calendar" reads the on-call rotation,
+ * "mailbox" reads and replies from the support Gmail mailbox. Only the refresh token is kept, encrypted.
+ */
+export type GooglePurpose = "calendar" | "mailbox";
+
+/*
+ * unconfigured  - GOOGLE_OAUTH_CLIENT_ID / _SECRET (or the purpose's own env) missing on the server
+ * not_connected - nobody has signed in yet (or it was disconnected)
+ * connected     - a refresh token is stored
+ * broken        - Google refused the stored token (revoked, password reset, admin action): sign in again
+ */
+export type GoogleConnectionState = "broken" | "connected" | "not_connected" | "unconfigured";
+
+export interface GoogleConnectionStatus {
+  brokenAt?: string;
+  brokenReason?: string;
+  connectedAt?: string;
+  /* Display name of the dashboard user who signed in. */
+  connectedBy?: string;
+  /* The Google account that was signed in. */
+  connectedEmail?: string;
+  /* Env vars the server still needs for this purpose. */
+  missingEnv: string[];
+  purpose: GooglePurpose;
+  state: GoogleConnectionState;
+}
+
+/* ========================================================== email intake */
+
+export type EmailInboxFilter = "all" | "linked" | "open" | "unlinked";
+
+export interface EmailAddress {
+  email: string;
+  name: string | null;
+}
+
+export interface EmailAttachmentMeta {
+  mime: string;
+  name: string;
+  size: number;
+}
+
+/* One email case (or Jira case with email on it) in the inbox list. */
+export interface EmailCaseListItem {
+  accountSuggestion: string | null;
+  caseId: string;
+  /* The latest customer sender; null when only the mailbox has written. */
+  from: EmailAddress | null;
+  jiraKey: string | null;
+  /* The action key: the Jira key when linked, else EM-<10 hex> (see email_reply). */
+  key: string;
+  lastActivityAt: string;
+  messageCount: number;
+  /* The latest message's new content, plain text, clipped. */
+  snippet: string;
+  source: "email" | "jira";
+  statusCategory: "done" | "indeterminate" | "new";
+  statusName: string;
+  subject: string;
+}
+
+export interface EmailCaseMessage {
+  attachments: EmailAttachmentMeta[];
+  /* Plain text only - an email's HTML is converted on the way in and never rendered. Quoted history is cut. */
+  bodyText: string;
+  cc: EmailAddress[];
+  createdAt: string;
+  direction: "inbound" | "outbound";
+  from: EmailAddress | null;
+  id: string;
+  /* Who sent an outbound reply from the dashboard. */
+  sentBy?: string;
+  source: "dashboard" | "email" | "jira_comment" | "slack";
+  subject: string | null;
+  to: EmailAddress[];
+}
+
+export interface EmailCaseDetail {
+  item: EmailCaseListItem;
+  messages: EmailCaseMessage[];
+}
+
+export interface EmailSyncStatus {
+  initialSyncAt: string | null;
+  lastError: { at: string; message: string } | null;
+  lastTick: { at: string; durationMs: number; errors: string[]; processed: number; skipped: number; trigger: "manual" | "poll" } | null;
+  pending: number;
+}
+
+/* GET /api/email/list */
+export interface EmailInboxResponse {
+  items: EmailCaseListItem[];
+  /* Env vars still missing for intake (DATABASE_URL, SUPPORT_MAILBOX_ADDRESS, ...). */
+  missingEnv: string[];
+  mailbox: GoogleConnectionStatus;
+  sendEnabled: boolean;
+  supportAddress: string | null;
+  sync: EmailSyncStatus | null;
+  testRecipient: string | null;
+  error?: string;
 }
 
 /* The Slack channel id of #firefighters (override with FIREFIGHTER_SLACK_CHANNEL). */

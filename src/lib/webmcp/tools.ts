@@ -153,6 +153,8 @@ const ACTION_OPERATIONS: readonly ActionOperation[] = [
 
 /* Which optional propose_action fields each operation reads; anything else given is a mistake worth pointing out. */
 const OPERATION_FIELDS: Record<ActionOperation, readonly string[]> = {
+  /* Not offered to the browser agent (absent from ACTION_OPERATIONS): a customer email is sent from the inbox by a person. */
+  email_reply: [],
   firefighter_escalation: ["body", "mention_on_call"],
   jira_assign: ["assignee"],
   jira_comment: ["body", "visibility"],
@@ -889,6 +891,8 @@ async function buildActionArgs(deps: PageToolDeps, key: string, operation: Actio
     }
     case "firefighter_escalation":
       return { body: requireString(args, "body", MAX_BODY_CHARS), mentionOnCall: readBoolean(args, "mention_on_call", false), operation };
+    case "email_reply":
+      throw new ArgError("Customer emails are sent from the email inbox by a person, not proposed by a page tool.");
   }
 }
 

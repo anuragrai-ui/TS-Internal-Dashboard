@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import { executeJiraWrite, getJiraUserName, getTicketVersion, jiraWriteConfigFromEnv, MISSING_TOKEN_MESSAGE } from "@/lib/actions/jiraWrites";
 import { defaultSlackWriteDeps, executeSlackWrite, findLinkedConversation, notLinkedMessage } from "@/lib/actions/slackWrites";
 import { redisActionStore } from "@/lib/actions/store";
-import { isIdempotencyKey, isJiraOperation, TICKET_KEY_PATTERN, validateActionArgs } from "@/lib/actions/validate";
+import { isEmailOperation, isIdempotencyKey, isJiraOperation, TICKET_KEY_PATTERN, validateActionArgs } from "@/lib/actions/validate";
+import { defaultEmailReplyDeps, sendEmailReply } from "@/lib/email/reply";
 import { checkExternalMessageSafety } from "@/lib/messageSafety";
 import { getTrackerDetail, invalidateTrackerDetail } from "@/lib/tracker/detail";
 import { getConversationsForTickets } from "@/lib/tracker/slackIndex";
@@ -13,6 +14,7 @@ import { getJiraCredentialsForAccount } from "@/lib/userJiraTokens";
 import type { JiraWriteResult } from "@/lib/actions/jiraWrites";
 import type { SlackTicketFacts, SlackWriteContext, SlackWriteResult } from "@/lib/actions/slackWrites";
 import type { ActionStore } from "@/lib/actions/store";
+import type { EmailWriteResult } from "@/lib/email/reply";
 import type { JiraCredentials } from "@/lib/jiraClient";
 import type { LeakCheckResult } from "@/lib/messageSafety";
 import type { SlackConversationRef, TrackerTicket } from "@/lib/tracker/types";
@@ -38,11 +40,13 @@ import type {
  *                     resend returns the stored execution as "duplicate"; one
  *                     still running answers 409
  * 3. rate limit       60 writes per person per clock hour
- * 4. safety           a customer-visible comment or a Slack post may not name
- *                     another ticket or an internal wiki link
+ * 4. safety           a customer-visible comment, an email reply or a Slack post
+ *                     may not name another ticket or an internal wiki link
  * 5. version check    Jira writes only: the `updated` the person was looking at
  *                     must still be Jira's, unless they force it ("conflict")
- * 6. write            Jira with their own token / Slack as the bot
+ * 6. write            Jira with their own token / Slack as the bot / an email
+ *                     from the support mailbox (src/lib/email/reply.ts; its
+ *                     ticketKey is the email case's key - see email_reply)
  * 7. record           the execution, the audit log, and a fresh detail panel
  *
  * Only an outcome that may have changed something (succeeded, uncertain)
@@ -88,6 +92,9 @@ export interface TicketFacts extends SlackTicketFacts {
 
 export interface ActionServiceDeps {
   credentials: (accountId: string) => Promise<JiraCredentials | null>;
+  email: {
+    reply: (args: ActionArgs, context: { actor: ActionActor; ticketKey: string }) => Promise<EmailWriteResult>;
+  };
   invalidate: (ticketKey: string) => Promise<void>;
   jira: {
     getVersion: (ticketKey: string, creds: JiraCredentials) => Promise<{ ok: true; version: string | null } | { error: string; ok: false }>;
@@ -146,10 +153,13 @@ export function sameVersion(a: string, b: string): boolean {
   return Number.isFinite(msA) && Number.isFinite(msB) ? msA === msB : a === b;
 }
 
-/* Customer-visible comments and Slack posts. Internal notes, status, assignee, priority and links carry no prose. */
+/* Customer-visible comments, email replies and Slack posts. Internal notes, status, assignee, priority and links carry no prose. */
 function bodyToCheck(args: ActionArgs): string | null {
   if (args.operation === "jira_comment") {
     return args.visibility === "public" ? args.body : null;
+  }
+  if (args.operation === "email_reply") {
+    return args.body;
   }
   return args.operation === "slack_thread_reply" || args.operation === "firefighter_escalation" ? args.body : null;
 }
@@ -257,6 +267,16 @@ async function run(deps: ActionServiceDeps, input: RunInput, actor: ActionActor,
     status: "failed",
     ticketKey,
   };
+  if (isEmailOperation(args.operation)) {
+    /* Goes to the customer: the strict check, with no other key allowed - not even a linked CP. */
+    const verdict = checkActionSafety(bodyToCheck(args) ?? "", ticketKey, []);
+    if (!verdict.safe) {
+      return { ...base, error: `Not sent - this would leak internal details: ${verdict.violations.join("; ")}.`, status: "failed" };
+    }
+    const result = await deps.email.reply(args, { actor, ticketKey });
+    return { ...base, ...result };
+  }
+
   const jira = isJiraOperation(args.operation);
   /* Slack actions need the CP keys (linkage, safety) and the ticket line; Jira ones don't read the tracker at all. */
   const facts = jira ? null : await deps.ticket(ticketKey, actor.accountId);
@@ -451,6 +471,10 @@ export async function createProposalWith(
   const valid = validateActionArgs(ticketKey, draft.args);
   if (!valid.ok) {
     return { error: valid.error, ok: false, status: 400 };
+  }
+  if (isEmailOperation(valid.args.operation)) {
+    /* A customer email is written and sent by a person from the inbox - never queued as an agent's suggestion. */
+    return { error: "Email replies can't be proposed - a person sends them from the email inbox.", ok: false, status: 400 };
   }
   const normalizedSource = normalizeSource(source);
   if (!normalizedSource) {
@@ -687,6 +711,9 @@ function defaultDeps(): ActionServiceDeps {
   const jiraMissing = "Jira isn't configured on the server (JIRA_BASE_URL).";
   return {
     credentials: (accountId) => getJiraCredentialsForAccount(accountId),
+    email: {
+      reply: (args, context) => sendEmailReply(args, context, defaultEmailReplyDeps()),
+    },
     invalidate: invalidateTrackerDetail,
     jira: {
       getVersion: (ticketKey, creds) => (jiraConfig ? getTicketVersion(ticketKey, creds, jiraConfig) : Promise.resolve({ error: jiraMissing, ok: false as const })),

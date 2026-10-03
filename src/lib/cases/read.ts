@@ -190,6 +190,7 @@ export async function listCases(limit = 200, db: SqlExecutor | null = getDb()): 
            FROM cases c
            LEFT JOIN accounts a ON a.id = c.account_id
            LEFT JOIN sla_clocks s ON s.case_id = c.id AND s.metric = 'resolution'
+           WHERE c.jira_key IS NOT NULL
            ORDER BY (c.status_category = 'done'), c.jira_updated DESC
            LIMIT $1`,
           [capped],
@@ -244,8 +245,8 @@ export async function getSyncStatus(db: SqlExecutor | null = getDb()): Promise<D
           sql(
             "status.counts",
             `SELECT
-               (SELECT count(*) FROM cases) AS cases,
-               (SELECT count(*) FROM cases WHERE status_category <> 'done') AS open_cases,
+               (SELECT count(*) FROM cases WHERE jira_key IS NOT NULL) AS cases,
+               (SELECT count(*) FROM cases WHERE jira_key IS NOT NULL AND status_category <> 'done') AS open_cases,
                (SELECT count(*) FROM case_messages) AS messages,
                (SELECT count(*) FROM case_events) AS events,
                (SELECT count(*) FROM accounts) AS accounts,

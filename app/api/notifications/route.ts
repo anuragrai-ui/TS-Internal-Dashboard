@@ -2,6 +2,7 @@ import { after, NextResponse } from "next/server";
 
 import { syncTick } from "@/lib/cases/jiraSync";
 import { requireIdentity } from "@/lib/currentIdentity";
+import { gmailSyncTick } from "@/lib/email/gmailSync";
 import { maybeRunEscalations } from "@/lib/escalation/runner";
 import { maybeSyncJiraNotifications } from "@/lib/notifications/jiraSync";
 import { getFeedVersion, listNotifications } from "@/lib/notifications/store";
@@ -62,6 +63,8 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
     /* Case store sync (Postgres): throttled to once every 2 minutes, ~40s budget, never throws; a no-op without DATABASE_URL. */
     await syncTick({ trigger: "poll" });
+    /* Support mailbox intake (Gmail -> case store): same 2-minute throttle, ~35s budget, never throws; a no-op until the mailbox is connected. */
+    await gmailSyncTick({ trigger: "poll" });
     try {
       await slackBackfillTick();
     } catch (error) {

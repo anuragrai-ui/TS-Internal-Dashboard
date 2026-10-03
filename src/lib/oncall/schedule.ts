@@ -1,17 +1,30 @@
 import { createHash } from "node:crypto";
 
 import { getCache, setCache } from "@/lib/cache";
-import { calendarTimeZone, decodeIcsBytes, expandCalendar, parseIcs, pruneCalendar } from "@/lib/oncall/ical";
+import { connectHint } from "@/lib/google/messages";
+import { defaultGoogleDeps, getGoogleAccessToken, getGoogleConnectionStatus, invalidateGoogleAccessToken } from "@/lib/google/oauth";
+import { fetchGoogleCalendarEvents, googleEventsToOccurrences } from "@/lib/oncall/googleCalendar";
+import { calendarTimeZone, decodeIcsBytes, expandCalendar, parseIcs, pruneCalendar, resolveTimeZone } from "@/lib/oncall/ical";
 import { buildShifts, normalizePersonName, parseRegionKeywords, regionOrder, selectOnCall } from "@/lib/oncall/shifts";
 import { resolveSlackUserIds } from "@/lib/oncall/slackDirectory";
 
-import type { IcsCalendar, IcsEvent } from "@/lib/oncall/ical";
+import type { GoogleCalendarFetch } from "@/lib/oncall/googleCalendar";
+import type { EventOccurrence, IcsCalendar, IcsEvent } from "@/lib/oncall/ical";
 import type { RegionKeywords } from "@/lib/oncall/shifts";
-import type { OnCallPerson, OnCallResponse, OnCallShift } from "@/lib/workspace/types";
+import type { GoogleConnectionState, OnCallPerson, OnCallResponse, OnCallShift } from "@/lib/workspace/types";
 
 /**
- * Who is firefighter right now, read from the rotation's shared Google
- * Calendar through its secret iCal address (ONCALL_CALENDAR_ICAL_URL).
+ * Who is firefighter right now, read from the rotation's Google Calendar.
+ *
+ * Two sources, in this order:
+ * 1. the Google Calendar API (src/lib/oncall/googleCalendar.ts), when the
+ *    "calendar" Google sign-in exists (connected, or broken - then the
+ *    error says to reconnect) and ONCALL_GOOGLE_CALENDAR_ID is set. This is
+ *    the one for the certifyos.com calendar, which has no iCal address.
+ * 2. the calendar's secret iCal address (ONCALL_CALENDAR_ICAL_URL).
+ * Neither: configured=false, and the page shows how to connect.
+ * Both go through the same cache, last-good fallback and failure backoff
+ * below, and come out as the same shifts.
  *
  * The address is a secret - anyone holding it can read the calendar - so it
  * is never logged, never put in an error message and never sent to the
@@ -39,6 +52,8 @@ const KEEP_BACK_MS = 3 * DAY_MS;
 const KEEP_AHEAD_MS = 30 * DAY_MS;
 const WINDOW_BACK_MS = DAY_MS;
 const WINDOW_AHEAD_MS = 14 * DAY_MS;
+/* The Google path's cache keys start with this, so they never collide with an iCal address's hash. */
+const GOOGLE_CACHE_PREFIX = "oncall:gcal";
 
 /* What is cached: the calendar already trimmed to the weeks that matter. */
 export interface StoredCalendar {
@@ -55,10 +70,27 @@ export interface OnCallStore {
   set(key: string, value: unknown, ttlSeconds: number): Promise<void>;
 }
 
+/* What the Google path caches: the window's occurrences, already expanded by Google. */
+export interface StoredGoogleCalendar {
+  calendarName?: string;
+  fetchedAt: string;
+  occurrences: EventOccurrence[];
+  timeZone?: string;
+}
+
+/* The Google Calendar API source - optional, so a deployment (or a test) without it reads iCal only. */
+export interface GoogleCalendarSource {
+  calendarId: string | undefined;
+  /* The "calendar" sign-in's state (src/lib/google/oauth.ts). */
+  connection: () => Promise<GoogleConnectionState>;
+  fetchEvents: (calendarId: string, fromMs: number, toMs: number) => Promise<GoogleCalendarFetch>;
+}
+
 export interface OnCallDeps {
   /* Zone for floating times when the calendar names none. */
   defaultTimeZone?: string;
   fetchIcs: (url: string) => Promise<IcsFetchResult>;
+  google?: GoogleCalendarSource;
   regionKeywords: RegionKeywords;
   resolvePeople: (people: OnCallPerson[]) => Promise<OnCallPerson[]>;
   store: OnCallStore;
@@ -159,14 +191,21 @@ export async function fetchIcs(url: string, fetchImpl: typeof fetch = fetch): Pr
 
 /* --------------------------------------------------------------- caching */
 
-function cacheKeys(url: string): { failure: string; fresh: string; lastGood: string; manual: string } {
+interface CacheKeys {
+  failure: string;
+  fresh: string;
+  lastGood: string;
+  manual: string;
+}
+
+function cacheKeys(source: string, prefix = "oncall:cal"): CacheKeys {
   /* A short hash, so changing the address starts a new cache - and the key never holds the secret itself. */
-  const id = createHash("sha256").update(url).digest("hex").slice(0, 16);
+  const id = createHash("sha256").update(source).digest("hex").slice(0, 16);
   return {
-    failure: `oncall:cal:${id}:failure`,
-    fresh: `oncall:cal:${id}:fresh`,
-    lastGood: `oncall:cal:${id}:last_good`,
-    manual: `oncall:cal:${id}:manual`,
+    failure: `${prefix}:${id}:failure`,
+    fresh: `${prefix}:${id}:fresh`,
+    lastGood: `${prefix}:${id}:last_good`,
+    manual: `${prefix}:${id}:manual`,
   };
 }
 
@@ -189,42 +228,83 @@ export function toStoredCalendar(text: string, at: Date, defaultTimeZone?: strin
   };
 }
 
-interface LoadedCalendar {
-  calendar: StoredCalendar | null;
+interface Loaded<T> {
+  calendar: T | null;
   error?: string;
 }
 
-async function loadCalendar(deps: OnCallDeps, url: string, at: Date, refresh: boolean): Promise<LoadedCalendar> {
-  const keys = cacheKeys(url);
+/**
+ * The cache dance both sources share: a fresh copy (10 min) wins; a recent
+ * failure (2 min) serves the last good copy without asking again; otherwise
+ * download, and on failure remember it and fall back to the last good copy.
+ * A Refresh skips the fresh copy and the backoff, at most once per 30s.
+ */
+async function loadThroughCache<T>(
+  store: OnCallStore,
+  keys: CacheKeys,
+  refresh: boolean,
+  download: () => Promise<{ ok: true; value: T } | { error: string; ok: false }>,
+): Promise<Loaded<T>> {
   let forced = false;
-  if (refresh && !(await deps.store.get<string>(keys.manual))) {
-    await deps.store.set(keys.manual, "1", MANUAL_REFRESH_SECONDS);
+  if (refresh && !(await store.get<string>(keys.manual))) {
+    await store.set(keys.manual, "1", MANUAL_REFRESH_SECONDS);
     forced = true;
   }
 
   if (!forced) {
-    const fresh = await deps.store.get<StoredCalendar>(keys.fresh);
+    const fresh = await store.get<T>(keys.fresh);
     if (fresh) {
       return { calendar: fresh };
     }
-    const recentFailure = await deps.store.get<string>(keys.failure);
+    const recentFailure = await store.get<string>(keys.failure);
     if (recentFailure) {
-      return { calendar: await deps.store.get<StoredCalendar>(keys.lastGood), error: recentFailure };
+      return { calendar: await store.get<T>(keys.lastGood), error: recentFailure };
     }
   }
 
-  const fetched = await deps.fetchIcs(url);
-  const stored = fetched.ok ? toStoredCalendar(decodeIcsBytes(fetched.bytes), at, deps.defaultTimeZone) : null;
-  if (stored) {
-    await Promise.all([deps.store.set(keys.fresh, stored, FRESH_SECONDS), deps.store.set(keys.lastGood, stored, LAST_GOOD_SECONDS)]);
-    return { calendar: stored };
+  const fetched = await download();
+  if (fetched.ok) {
+    await Promise.all([store.set(keys.fresh, fetched.value, FRESH_SECONDS), store.set(keys.lastGood, fetched.value, LAST_GOOD_SECONDS)]);
+    return { calendar: fetched.value };
   }
+  await store.set(keys.failure, fetched.error, FAILURE_BACKOFF_SECONDS);
+  return { calendar: await store.get<T>(keys.lastGood), error: fetched.error };
+}
 
-  const error = fetched.ok
-    ? "The address didn't return an iCal calendar - ONCALL_CALENDAR_ICAL_URL must be the \"Secret address in iCal format\" (ends in .ics)."
-    : fetched.error;
-  await deps.store.set(keys.failure, error, FAILURE_BACKOFF_SECONDS);
-  return { calendar: await deps.store.get<StoredCalendar>(keys.lastGood), error };
+async function loadCalendar(deps: OnCallDeps, url: string, at: Date, refresh: boolean): Promise<Loaded<StoredCalendar>> {
+  return loadThroughCache<StoredCalendar>(deps.store, cacheKeys(url), refresh, async () => {
+    const fetched = await deps.fetchIcs(url);
+    if (!fetched.ok) {
+      return fetched;
+    }
+    const stored = toStoredCalendar(decodeIcsBytes(fetched.bytes), at, deps.defaultTimeZone);
+    return stored
+      ? { ok: true, value: stored }
+      : { error: "The address didn't return an iCal calendar - ONCALL_CALENDAR_ICAL_URL must be the \"Secret address in iCal format\" (ends in .ics).", ok: false };
+  });
+}
+
+/* Google answers with the window already expanded, so the cached copy holds occurrences over the same 3-days-back to 30-ahead span the iCal copy is trimmed to - a week-old last-good copy still answers "now" and "next 14 days". */
+async function loadGoogleCalendar(source: GoogleCalendarSource, store: OnCallStore, calendarId: string, at: Date, refresh: boolean): Promise<Loaded<StoredGoogleCalendar>> {
+  return loadThroughCache<StoredGoogleCalendar>(store, cacheKeys(calendarId, GOOGLE_CACHE_PREFIX), refresh, async () => {
+    const atMs = at.getTime();
+    const fetched = await source.fetchEvents(calendarId, atMs - KEEP_BACK_MS, atMs + KEEP_AHEAD_MS);
+    if (!fetched.ok) {
+      return { error: fetched.error, ok: false };
+    }
+    if (fetched.truncated) {
+      console.warn(`On-call: the Google calendar returned more than ${fetched.events.length} events in the window; the rest were skipped.`);
+    }
+    return {
+      ok: true,
+      value: {
+        fetchedAt: at.toISOString(),
+        occurrences: googleEventsToOccurrences(fetched.events, fetched.timeZone),
+        ...(fetched.calendarName ? { calendarName: fetched.calendarName } : {}),
+        ...(fetched.timeZone ? { timeZone: fetched.timeZone } : {}),
+      },
+    };
+  });
 }
 
 /* ------------------------------------------------------------------ build */
@@ -253,11 +333,57 @@ async function withSlackIds(shifts: OnCallShift[], resolve: OnCallDeps["resolveP
   return shifts.map((shift) => ({ ...shift, people: shift.people.map((person) => byKey.get(personKey(person)) ?? person) }));
 }
 
+/* Occurrences -> shifts with Slack ids -> now / next / upcoming. Shared by both sources. */
+async function selectFrom(deps: OnCallDeps, occurrences: EventOccurrence[], at: Date): Promise<Pick<OnCallResponse, "next" | "now" | "upcoming">> {
+  const shifts = await withSlackIds(buildShifts(occurrences, deps.regionKeywords), deps.resolvePeople);
+  return selectOnCall(shifts, at, { aheadMs: WINDOW_AHEAD_MS, backMs: WINDOW_BACK_MS, regions: regionOrder(deps.regionKeywords) });
+}
+
+async function googleSchedule(deps: OnCallDeps, source: GoogleCalendarSource, calendarId: string, at: Date, refresh: boolean): Promise<OnCallResponse> {
+  const base: OnCallResponse = { at: at.toISOString(), configured: true, fetchedAt: null, next: [], now: [], source: "google", upcoming: [] };
+  const { calendar, error } = await loadGoogleCalendar(source, deps.store, calendarId, at, refresh);
+  if (!calendar) {
+    return { ...base, error: error ?? "Couldn't read the on-call calendar." };
+  }
+  const atMs = at.getTime();
+  const from = atMs - WINDOW_BACK_MS;
+  const to = atMs + WINDOW_AHEAD_MS;
+  const inWindow = calendar.occurrences.filter((occurrence) => occurrence.start < to && occurrence.end > from);
+  return {
+    ...base,
+    ...(await selectFrom(deps, inWindow, at)),
+    fetchedAt: calendar.fetchedAt,
+    timeZone: resolveTimeZone(calendar.timeZone) ?? resolveTimeZone(deps.defaultTimeZone) ?? "UTC",
+    ...(calendar.calendarName ? { calendarName: calendar.calendarName } : {}),
+    ...(error ? { error } : {}),
+  };
+}
+
 /** getOnCall with explicit deps - what the tests drive. */
 export async function getOnCallWith(deps: OnCallDeps, at: Date, options: OnCallOptions = {}): Promise<OnCallResponse> {
   const base: OnCallResponse = { at: at.toISOString(), configured: true, fetchedAt: null, next: [], now: [], upcoming: [] };
+  const calendarId = deps.google?.calendarId?.trim();
+  let googleState: GoogleConnectionState | null = null;
+  if (deps.google && calendarId) {
+    googleState = await deps.google.connection();
+    if (googleState === "connected" || googleState === "broken") {
+      return googleSchedule(deps, deps.google, calendarId, at, options.refresh === true);
+    }
+  }
+
   const url = deps.url?.trim();
   if (!url) {
+    if (googleState !== null) {
+      /* The calendar is named but nobody has signed in (or the OAuth client isn't set up): say exactly that. */
+      return {
+        ...base,
+        configured: false,
+        error:
+          googleState === "unconfigured"
+            ? "ONCALL_GOOGLE_CALENDAR_ID is set, but Google sign-in isn't set up on the server (GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET)."
+            : `ONCALL_GOOGLE_CALENDAR_ID is set, but nobody has connected Google yet. ${connectHint("calendar")}`,
+      };
+    }
     return { ...base, configured: false };
   }
   if (!isHttpsUrl(url)) {
@@ -276,12 +402,11 @@ export async function getOnCallWith(deps: OnCallDeps, at: Date, options: OnCallO
     from: atMs - WINDOW_BACK_MS,
     to: atMs + WINDOW_AHEAD_MS,
   });
-  const shifts = await withSlackIds(buildShifts(occurrences, deps.regionKeywords), deps.resolvePeople);
-  const selection = selectOnCall(shifts, at, { aheadMs: WINDOW_AHEAD_MS, backMs: WINDOW_BACK_MS, regions: regionOrder(deps.regionKeywords) });
 
   return {
     ...base,
-    ...selection,
+    ...(await selectFrom(deps, occurrences, at)),
+    ...(deps.google ? { source: "ical" as const } : {}),
     fetchedAt: calendar.fetchedAt,
     timeZone: calendarTimeZone(ics, deps.defaultTimeZone),
     ...(calendar.calendarName ? { calendarName: calendar.calendarName } : {}),
@@ -289,9 +414,27 @@ export async function getOnCallWith(deps: OnCallDeps, at: Date, options: OnCallO
   };
 }
 
+function defaultGoogleSource(): GoogleCalendarSource {
+  return {
+    calendarId: process.env.ONCALL_GOOGLE_CALENDAR_ID,
+    connection: async () => (await getGoogleConnectionStatus(defaultGoogleDeps(), "calendar")).state,
+    fetchEvents: (calendarId, fromMs, toMs) => {
+      const google = defaultGoogleDeps();
+      return fetchGoogleCalendarEvents({
+        accessToken: () => getGoogleAccessToken(google, "calendar"),
+        calendarId,
+        onUnauthorized: () => invalidateGoogleAccessToken(google, "calendar"),
+        timeMax: toMs,
+        timeMin: fromMs,
+      });
+    },
+  };
+}
+
 function defaultDeps(): OnCallDeps {
   return {
     fetchIcs: (url) => fetchIcs(url),
+    google: defaultGoogleSource(),
     regionKeywords: parseRegionKeywords(process.env.ONCALL_REGION_KEYWORDS),
     resolvePeople: resolveSlackUserIds,
     store: {
@@ -316,7 +459,7 @@ export async function getOnCall(now: Date = new Date(), options: OnCallOptions =
     console.warn(`On-call: couldn't build the schedule. ${safeErrorText(error)}`);
     return {
       at: now.toISOString(),
-      configured: Boolean(process.env.ONCALL_CALENDAR_ICAL_URL?.trim()),
+      configured: Boolean(process.env.ONCALL_CALENDAR_ICAL_URL?.trim() || process.env.ONCALL_GOOGLE_CALENDAR_ID?.trim()),
       error: "Couldn't read the on-call calendar.",
       fetchedAt: null,
       next: [],

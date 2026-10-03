@@ -9,7 +9,7 @@ export type TextActionArgs = Extract<ActionArgs, { body: string }>;
 
 /** The operations a person edits as text before approving (the others are a choice, not prose). */
 export function isTextAction(args: ActionArgs): args is TextActionArgs {
-  return args.operation === "jira_comment" || args.operation === "slack_thread_reply" || args.operation === "firefighter_escalation";
+  return args.operation === "jira_comment" || args.operation === "slack_thread_reply" || args.operation === "firefighter_escalation" || args.operation === "email_reply";
 }
 
 /** One short line: "Reply to the customer", "Move to In Progress", "Assign to Jane Doe". */
@@ -29,6 +29,8 @@ export function describeAction(args: ActionArgs, channelName?: string): string {
       return `Reply in the ${channelName ? `#${channelName}` : "Slack"} thread`;
     case "firefighter_escalation":
       return args.mentionOnCall ? "Escalate in #firefighters, tagging on-call" : "Escalate in #firefighters";
+    case "email_reply":
+      return "Email the customer";
   }
 }
 
@@ -53,7 +55,10 @@ export const EXECUTION_STATUS_TONE: Record<ExecutionStatus, "danger" | "info" | 
   uncertain: "warning",
 };
 
-/** Where the result can be seen: Jira for Jira writes, Slack for posts. */
+/** Where the result can be seen: Jira for Jira writes, Gmail for email replies, Slack for posts. */
 export function externalLinkLabel(execution: Pick<ActionExecution, "args">): string {
+  if (execution.args.operation === "email_reply") {
+    return "Open in Gmail";
+  }
   return execution.args.operation.startsWith("jira_") ? "Open in Jira" : "Open in Slack";
 }

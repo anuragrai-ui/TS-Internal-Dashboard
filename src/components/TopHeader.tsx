@@ -22,6 +22,7 @@ const SECTION_TITLES: Record<string, string> = {
   "closure-candidates": "Closure Candidates",
   escalations: "Escalation bot",
   history: "History",
+  inbox: "Email inbox",
   notifications: "Notifications",
   oncall: "On-call & firefighters",
   "sheet-followups": "Sheet AI Follow-Ups",

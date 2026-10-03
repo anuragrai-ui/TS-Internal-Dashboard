@@ -31,6 +31,8 @@
     "test:theme": "npx tsx scripts/test-theme.ts",
     "test:tracker": "npx tsx scripts/test-tracker.ts",
     "test:tracker-attention": "npx tsx scripts/test-tracker-attention.ts",
+    "test:email": "npx tsx scripts/test-email.ts",
+    "test:google": "npx tsx scripts/test-google.ts",
     "test:actions": "npx tsx scripts/test-actions.ts",
     "test:assist": "npx tsx scripts/test-assist.ts",
     "test:oncall": "npx tsx scripts/test-oncall.ts",

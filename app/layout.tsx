@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import "./globals.css";
 import "./styles/actions.css";
 import "./styles/assist.css";
+import "./styles/inbox.css";
 import "./styles/oncall.css";
 
 const inter = Inter({

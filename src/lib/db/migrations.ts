@@ -136,5 +136,45 @@ const V1_INITIAL: string[] = [
   `CREATE INDEX IF NOT EXISTS audit_log_at_idx ON audit_log (at DESC)`,
 ];
 
+/*
+ * Email intake (src/lib/email/*): a case can now start from an email to the
+ * support mailbox instead of a Jira ticket.
+ * - cases.source says where a case started; jira_key becomes nullable for
+ *   email cases with no TS ticket yet. The existing UNIQUE constraint on
+ *   jira_key stays as it is: Postgres lets any number of NULLs through a
+ *   unique constraint, and jiraSync's ON CONFLICT (jira_key) keeps using it
+ *   unchanged - no partial index needed. The key's CHECK passes for NULL.
+ * - every case still has an identity: a Jira key, an email thread, or both.
+ * - email_thread_id is the Gmail thread an email case started from; replies
+ *   that land on a Jira case are found through case_messages.metadata
+ *   (thread_id), indexed below.
+ * - case_messages.metadata holds the email's headers (message_id, from, to,
+ *   cc, subject, in_reply_to, references) and attachment metadata (name,
+ *   size, mime) - never attachment content.
+ * - account_suggestion is the sender's company domain for a person to
+ *   confirm; it is not an account link.
+ * The source CHECK is swapped by name: Postgres named the inline one
+ * case_messages_source_check.
+ */
+const V2_EMAIL_INTAKE: string[] = [
+  `ALTER TABLE cases ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'jira'`,
+  `ALTER TABLE cases DROP CONSTRAINT IF EXISTS cases_source_check`,
+  `ALTER TABLE cases ADD CONSTRAINT cases_source_check CHECK (source IN ('jira', 'email'))`,
+  `ALTER TABLE cases ALTER COLUMN jira_key DROP NOT NULL`,
+  `ALTER TABLE cases ADD COLUMN IF NOT EXISTS email_thread_id text UNIQUE`,
+  `ALTER TABLE cases ADD COLUMN IF NOT EXISTS account_suggestion text`,
+  `ALTER TABLE cases DROP CONSTRAINT IF EXISTS cases_identity_check`,
+  `ALTER TABLE cases ADD CONSTRAINT cases_identity_check CHECK (jira_key IS NOT NULL OR email_thread_id IS NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS cases_source_idx ON cases (source) WHERE source <> 'jira'`,
+  `ALTER TABLE case_messages DROP CONSTRAINT IF EXISTS case_messages_source_check`,
+  `ALTER TABLE case_messages ADD CONSTRAINT case_messages_source_check CHECK (source IN ('jira_comment', 'slack', 'dashboard', 'email'))`,
+  `ALTER TABLE case_messages ADD COLUMN IF NOT EXISTS metadata jsonb`,
+  `CREATE INDEX IF NOT EXISTS case_messages_email_thread_idx ON case_messages ((metadata->>'thread_id')) WHERE source = 'email'`,
+  `CREATE INDEX IF NOT EXISTS contacts_email_idx ON contacts (lower(email)) WHERE email IS NOT NULL`,
+];
+
 /** Every migration, oldest first. Append only. */
-export const MIGRATIONS: readonly Migration[] = [{ name: "initial_case_store", statements: V1_INITIAL, version: 1 }];
+export const MIGRATIONS: readonly Migration[] = [
+  { name: "initial_case_store", statements: V1_INITIAL, version: 1 },
+  { name: "email_intake", statements: V2_EMAIL_INTAKE, version: 2 },
+];

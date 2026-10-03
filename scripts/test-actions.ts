@@ -16,6 +16,7 @@ import type { JiraWriteConfig, JiraWriteResult } from "@/lib/actions/jiraWrites"
 import type { ActionServiceDeps, TicketFacts } from "@/lib/actions/service";
 import type { SlackWriteDeps, SlackWriteResult } from "@/lib/actions/slackWrites";
 import type { ActionStore } from "@/lib/actions/store";
+import type { EmailWriteResult } from "@/lib/email/reply";
 import type { JiraCredentials } from "@/lib/jiraClient";
 import type { PostSlackMessageOptions } from "@/lib/slackApi";
 import type { SlackConversationRef } from "@/lib/tracker/types";
@@ -119,11 +120,15 @@ interface FakeWorld {
   liveVersion: string | null;
   slackWrites: ActionArgs[];
   slackResult: SlackWriteResult;
+  emailWrites: ActionArgs[];
+  emailResult: EmailWriteResult;
 }
 
 function world(overrides: Partial<FakeWorld> = {}): FakeWorld {
   return {
     creds: CREDS,
+    emailResult: { externalId: "gmail-sent-1", redirectedToTestChannel: false, status: "succeeded" },
+    emailWrites: [],
     facts: { cpKeys: ["CP-55"], priority: "High", summary: "Roster import fails", updated: VERSION },
     invalidated: [],
     jiraResult: { externalId: "10001", externalUrl: "https://certifyos.atlassian.net/browse/TS-1?focusedCommentId=10001", status: "succeeded" },
@@ -139,6 +144,12 @@ function deps(store: ActionStore | null, fake: FakeWorld, now: () => Date = () =
   let counter = 0;
   return {
     credentials: () => Promise.resolve(fake.creds),
+    email: {
+      reply: (args) => {
+        fake.emailWrites.push(args);
+        return Promise.resolve(fake.emailResult);
+      },
+    },
     invalidate: (key) => {
       fake.invalidated.push(key);
       return Promise.resolve();

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
+import { GoogleConnectionCard } from "@/components/GoogleConnectionCard";
 import { Icon } from "@/components/Icon";
 import {
   feedProblem,
@@ -49,12 +50,18 @@ async function getJson<T>(url: string, valid: (value: unknown) => value is T): P
 
 /* ------------------------------------------------------------- on-call */
 
-function SetupCalendar(): React.ReactElement {
+function SetupCalendar({ error }: { error?: string }): React.ReactElement {
   return (
     <div className="oc-setup" role="note">
       <h3 className="oc-setup-title">
         <Icon name="gear" size={16} /> Connect the firefighter calendar
       </h3>
+      {error ? <p className="oc-setup-note">{error}</p> : null}
+      <p className="oc-muted oc-setup-note">
+        The certifyos.com rotation calendar is read through Google&apos;s Calendar API: set <code>ONCALL_GOOGLE_CALENDAR_ID</code> in Vercel,
+        then use <strong>Connect Google Calendar</strong> above and sign in once with a certifyos.com account that can see the calendar.
+        For a calendar that has a secret iCal address instead:
+      </p>
       <ol className="oc-setup-steps">
         <li>
           In Google Calendar, open <strong>Settings</strong> and choose the firefighter calendar under <em>Settings for my calendars</em>.
@@ -278,6 +285,11 @@ export function OnCallBoard(): React.ReactElement {
     };
   }, [loadFeed, loadOncall]);
 
+  /* A new or removed sign-in changes the source: read it now instead of from the 10-minute copy. */
+  const reloadAfterConnect = useCallback(() => {
+    void loadOncall(true);
+  }, [loadOncall]);
+
   const toggleHideBots = (value: boolean): void => {
     setHideBots(value);
     try {
@@ -305,6 +317,7 @@ export function OnCallBoard(): React.ReactElement {
             </h2>
             {oncall?.configured ? (
               <p className="oc-muted oc-section-meta">
+                {oncall.source === "google" ? "Google Calendar API · " : oncall.source === "ical" ? "iCal address · " : ""}
                 {oncall.calendarName ? `${oncall.calendarName} · ` : ""}
                 {oncall.fetchedAt ? `calendar read ${relativeTime(oncall.fetchedAt, clock)}` : "calendar not read yet"}
                 {oncall.timeZone ? ` · days in ${oncall.timeZone}` : ""}
@@ -322,6 +335,18 @@ export function OnCallBoard(): React.ReactElement {
           </div>
         ) : null}
 
+        <GoogleConnectionCard
+          connectLabel="Connect Google Calendar"
+          description={
+            oncall?.source === "ical"
+              ? "Read-only access to the rotation calendar. Until it's connected, the schedule comes from the secret iCal address."
+              : "Read-only access (calendar.readonly) to the rotation calendar, by one certifyos.com sign-in that can see it."
+          }
+          onChange={reloadAfterConnect}
+          purpose="calendar"
+          title="Google Calendar"
+        />
+
         {!oncall ? (
           oncallLoading ? (
             <div aria-live="polite" className="oc-loading">
@@ -329,7 +354,7 @@ export function OnCallBoard(): React.ReactElement {
             </div>
           ) : null
         ) : !oncall.configured ? (
-          <SetupCalendar />
+          <SetupCalendar error={oncall.error} />
         ) : (
           <>
             {oncall.error ? (

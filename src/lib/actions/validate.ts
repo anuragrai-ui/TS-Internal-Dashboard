@@ -13,6 +13,10 @@ import type { ActionArgs, ActionOperation } from "@/lib/workspace/types";
  */
 
 export const TICKET_KEY_PATTERN = /^TS-\d+$/;
+/* An email case not (yet) linked to a TS ticket: "EM-" + the first 10 hex digits of its uuid, upper-cased (src/lib/email/keys.ts). */
+export const EMAIL_CASE_KEY_PATTERN = /^EM-[0-9A-F]{10}$/;
+/* Case ids are Postgres uuids. */
+const CASE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export const CP_KEY_PATTERN = /^CP-\d+$/;
 /* Public (C) and private (G) channels only - never a DM. */
 export const SLACK_CHANNEL_PATTERN = /^[CG][A-Z0-9]{6,}$/;
@@ -28,6 +32,7 @@ const NAME_MAX_CHARS = 200;
 export const ACTION_PRIORITIES: readonly TrackerPriority[] = ["Critical", "High", "Medium", "Low"];
 
 const FIELDS: Record<ActionOperation, { optional: readonly string[]; required: readonly string[] }> = {
+  email_reply: { optional: [], required: ["body", "caseId"] },
   firefighter_escalation: { optional: [], required: ["body", "mentionOnCall"] },
   jira_assign: { optional: ["displayName"], required: ["accountId"] },
   jira_comment: { optional: [], required: ["body", "visibility"] },
@@ -49,9 +54,19 @@ export function isIdempotencyKey(value: unknown): value is string {
   return typeof value === "string" && IDEMPOTENCY_KEY_PATTERN.test(value);
 }
 
-/* Jira writes go out with the person's own token and get the version check; the rest are Slack posts by the bot. */
+/* Jira writes go out with the person's own token and get the version check; the rest are Slack posts by the bot - or an email. */
 export function isJiraOperation(operation: ActionOperation): boolean {
   return operation.startsWith("jira_");
+}
+
+/* Sent from the support Gmail mailbox (src/lib/email/reply.ts). */
+export function isEmailOperation(operation: ActionOperation): boolean {
+  return operation === "email_reply";
+}
+
+/** Whether a key can carry an action at all: a TS ticket, or an unlinked email case (email replies only). Pure. */
+export function isActionTicketKey(key: string): boolean {
+  return TICKET_KEY_PATTERN.test(key) || EMAIL_CASE_KEY_PATTERN.test(key);
 }
 
 class Invalid extends Error {}
@@ -117,6 +132,12 @@ function argsFor(operation: ActionOperation, record: Record<string, unknown>): A
         operation,
         threadTs: matching(record, "threadTs", SLACK_TS_PATTERN, 'a Slack message ts like "1727881200.000100"'),
       };
+    case "email_reply":
+      return {
+        body: text(record, "body", BODY_MAX_CHARS),
+        caseId: matching(record, "caseId", CASE_ID_PATTERN, "the email case's id (a uuid)", (value) => value.toLowerCase()),
+        operation,
+      };
     case "firefighter_escalation":
       if (typeof record.mentionOnCall !== "boolean") {
         throw new Invalid('"mentionOnCall" must be true or false.');
@@ -127,14 +148,16 @@ function argsFor(operation: ActionOperation, record: Record<string, unknown>): A
 
 /** Checks a ticket key and one operation's arguments; returns a clean copy of the args, or a message saying what's wrong. Pure. */
 export function validateActionArgs(ticketKey: string, args: unknown): { ok: true; args: ActionArgs } | { ok: false; error: string } {
-  if (typeof ticketKey !== "string" || !TICKET_KEY_PATTERN.test(ticketKey)) {
-    return { error: "Actions only apply to TS tickets (a key like TS-123).", ok: false };
+  const record = args && typeof args === "object" && !Array.isArray(args) ? (args as Record<string, unknown>) : null;
+  /* An EM- key names an email case with no Jira ticket: the only thing that can happen to it here is an email reply. */
+  const emailCaseKey = typeof ticketKey === "string" && EMAIL_CASE_KEY_PATTERN.test(ticketKey) && record?.operation === "email_reply";
+  if (typeof ticketKey !== "string" || (!TICKET_KEY_PATTERN.test(ticketKey) && !emailCaseKey)) {
+    return { error: "Actions only apply to TS tickets (a key like TS-123), or email replies on an email case (EM-...).", ok: false };
   }
-  if (!args || typeof args !== "object" || Array.isArray(args)) {
+  if (!record) {
     return { error: "Expected the action's arguments as an object.", ok: false };
   }
 
-  const record = args as Record<string, unknown>;
   const operation = record.operation;
   if (!isActionOperation(operation)) {
     return {

@@ -375,6 +375,8 @@ export async function executeJiraWrite(ticketKey: string, args: ActionArgs, cred
       case "firefighter_escalation":
       case "slack_thread_reply":
         return { error: `${args.operation} is a Slack action, not a Jira one.`, status: "failed" };
+      case "email_reply":
+        return { error: "email_reply is sent from the support mailbox, not Jira.", status: "failed" };
     }
   } catch (error) {
     /* Only reachable through a bug above (every call path already returns a result) - and it may have been mid-write. */

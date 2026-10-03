@@ -10,6 +10,17 @@ export interface LeakCheckResult {
    app/api/slack/events/route.ts, generalized from TS|CP to any project. */
 const JIRA_KEY_PATTERN = /\b[A-Z][A-Z0-9]{1,9}-\d{1,6}\b/g;
 const WIKI_URL_PATTERN = /atlassian\.net\/wiki|\/wiki\//i;
+/* Internal Slack threads and the dashboard's own pages: fine in an internal note or a Slack reply, never in a customer reply. */
+const SLACK_URL_PATTERN = /[a-z0-9-]+\.slack\.com\/(?:archives|team|client)\/|slack\.com\/app_redirect/i;
+const DASHBOARD_HOSTS = ["ts-internal-dashboard", ...(process.env.APP_BASE_URL ? [hostOf(process.env.APP_BASE_URL)] : [])].filter(Boolean);
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host.toLowerCase();
+  } catch {
+    return "";
+  }
+}
 
 /**
  * Checks a draft that's about to go to an external (client) reporter for
@@ -22,7 +33,7 @@ const WIKI_URL_PATTERN = /atlassian\.net\/wiki|\/wiki\//i;
  * scrubbed sentence can read as broken or misleading and nobody would know
  * to check it.
  */
-export function checkExternalMessageSafety(text: string, ownIssueKey: string): LeakCheckResult {
+export function checkExternalMessageSafety(text: string, ownIssueKey: string, options: { allowInternalLinks?: boolean } = {}): LeakCheckResult {
   const violations: string[] = [];
 
   const keyMatches = text.match(JIRA_KEY_PATTERN) ?? [];
@@ -36,6 +47,16 @@ export function checkExternalMessageSafety(text: string, ownIssueKey: string): L
 
   if (WIKI_URL_PATTERN.test(text)) {
     violations.push("References an internal Confluence/wiki link");
+  }
+
+  if (!options.allowInternalLinks) {
+    if (SLACK_URL_PATTERN.test(text)) {
+      violations.push("References an internal Slack link");
+    }
+    const lower = text.toLowerCase();
+    if (DASHBOARD_HOSTS.some((host) => lower.includes(host))) {
+      violations.push("References the internal TS dashboard");
+    }
   }
 
   return { safe: violations.length === 0, violations };

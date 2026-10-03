@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { IdentityRequired } from "@/components/IdentityRequired";
 import { TrackerListSkeleton } from "@/components/tracker/TrackerList";
 import { TrackerWorkspace } from "@/components/tracker/TrackerWorkspace";
+import { WebMcpProvider } from "@/components/webmcp/WebMcpProvider";
 import { getCurrentIdentity } from "@/lib/currentIdentity";
 
 import type { Metadata } from "next";
@@ -40,17 +41,21 @@ export default async function TrackerPage(): Promise<React.ReactElement> {
   }
 
   return (
-    /* useSearchParams in the workspace needs a Suspense boundary; the fallback is the same skeleton the list shows while loading. */
-    <Suspense
-      fallback={
-        <div className="trk-workspace">
-          <div className="trk-center">
-            <TrackerListSkeleton />
+    <>
+      {/* Browser-agent page tools (WebMCP) for this identified person; a no-op in browsers without the API. */}
+      <WebMcpProvider accountId={identity.accountId} />
+      {/* useSearchParams in the workspace needs a Suspense boundary; the fallback is the same skeleton the list shows while loading. */}
+      <Suspense
+        fallback={
+          <div className="trk-workspace">
+            <div className="trk-center">
+              <TrackerListSkeleton />
+            </div>
           </div>
-        </div>
-      }
-    >
-      <TrackerWorkspace />
-    </Suspense>
+        }
+      >
+        <TrackerWorkspace />
+      </Suspense>
+    </>
   );
 }

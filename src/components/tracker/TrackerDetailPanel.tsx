@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { ProposalsList } from "@/components/actions/ProposalsList";
+import { TicketActionsBar } from "@/components/actions/TicketActionsBar";
+import { TicketComposer } from "@/components/actions/TicketComposer";
+import { AssistPanel } from "@/components/assist/AssistPanel";
 import { Icon } from "@/components/Icon";
 import { SlackThreadMessages } from "@/components/tracker/SlackThreadMessages";
 import { CpOutcomeDot, cpOutcomeLabel, PriorityText, WhoseMoveLabel } from "@/components/tracker/TrackerBits";
@@ -9,6 +13,7 @@ import { fetchTrackerDetail } from "@/components/tracker/trackerApi";
 import { TrackerProperties } from "@/components/tracker/TrackerProperties";
 import { TrackerTimeline } from "@/components/tracker/TrackerTimeline";
 
+import type { ComposerTab } from "@/components/actions/TicketComposer";
 import type { TrackerDetail, TrackerTicket } from "@/lib/tracker/types";
 
 type DetailState = { detail: TrackerDetail; status: "ready" } | { error: string; status: "error" } | { status: "loading" };
@@ -78,10 +83,19 @@ export function TrackerDetailPanel({
   const { reload, state } = useTrackerDetail(ticket.key, ticket.lastActivityAt);
   const [tab, setTab] = useState("all");
   const [copied, setCopied] = useState(false);
+  /* Bumped after the panel itself wrote something, so the action log refetches alongside the detail. */
+  const [actionsNonce, setActionsNonce] = useState(0);
+  const [composerRequest, setComposerRequest] = useState<{ nonce: number; tab: ComposerTab } | null>(null);
 
   useEffect(() => {
     setTab("all");
+    setComposerRequest(null);
   }, [ticket.key]);
+
+  const afterWrite = useCallback(() => {
+    reload();
+    setActionsNonce((value) => value + 1);
+  }, [reload]);
 
   const detail = state.status === "ready" && state.detail.ticket.key === ticket.key ? state.detail : null;
   /* The list's copy is already on screen; the detail's copy is fresher once it arrives. */
@@ -141,6 +155,12 @@ export function TrackerDetailPanel({
           </div>
         </div>
 
+        <TicketActionsBar
+          onChanged={afterWrite}
+          onEscalate={() => setComposerRequest((current) => ({ nonce: (current?.nonce ?? 0) + 1, tab: "firefighters" }))}
+          ticket={shown}
+        />
+
         <div aria-label="Activity threads" className="trk-tabs" role="tablist">
           <button aria-selected={tab === "all"} className="trk-tab" onClick={() => setTab("all")} role="tab" type="button">
             All activity
@@ -168,6 +188,18 @@ export function TrackerDetailPanel({
 
         <div className="trk-panel-body">
           <div className="trk-panel-main" role="tabpanel">
+            <details className="act-assist-fold" open>
+              <summary className="act-assist-summary">
+                <Icon name="bot" size={13} />
+                AI Assist &amp; proposals
+                <Icon name="chevron-down" size={12} />
+              </summary>
+              <div className="act-assist-body">
+                <AssistPanel ticketKey={shown.key} />
+                <ProposalsList conversations={conversations} now={now} onApproved={afterWrite} refreshToken={actionsNonce} ticketKey={shown.key} />
+              </div>
+            </details>
+
             {detail && detail.errors.length > 0 ? (
               <p className="trk-hint" data-tone="warning" role="status">
                 Some activity couldn&apos;t be loaded: {detail.errors.join(" · ")}
@@ -227,6 +259,15 @@ export function TrackerDetailPanel({
                 ))}
               </div>
             )}
+
+            <TicketComposer
+              conversations={conversations}
+              defaultConversationId={activeConversation?.id}
+              key={shown.key}
+              onSent={afterWrite}
+              openRequest={composerRequest}
+              ticketKey={shown.key}
+            />
           </div>
 
           <TrackerProperties conversations={conversations} jiraBaseUrl={jiraBaseUrl} now={now} onLinked={reload} ticket={shown} />

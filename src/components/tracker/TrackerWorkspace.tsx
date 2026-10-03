@@ -26,10 +26,12 @@ import {
   selectTickets,
   viewCounts,
 } from "@/lib/tracker/views";
+import { UI_EVENTS } from "@/lib/workspace/types";
 
 import type { TrackerLayout } from "@/components/tracker/TrackerHeader";
 import type { TrackerListResponse, WhoseMove } from "@/lib/tracker/types";
 import type { TrackerFilters, TrackerSortId, TrackerViewId, ViewContext } from "@/lib/tracker/views";
+import type { OpenCaseDetail } from "@/lib/workspace/types";
 
 /* The snapshot itself rebuilds every few minutes server-side; a minute keeps the list fresh without hammering Redis. */
 const VISIBLE_POLL_MS = 60_000;
@@ -319,6 +321,18 @@ export function TrackerWorkspace(): React.ReactElement {
     },
     [openKey],
   );
+
+  /* A page tool (WebMCP open_case, or one that drafts/proposes on a ticket) asks for a ticket: open it exactly as a row click does. */
+  useEffect(() => {
+    const onOpenCase = (event: Event): void => {
+      const key = (event as CustomEvent<Partial<OpenCaseDetail> | null>).detail?.key;
+      if (typeof key === "string" && /^TS-\d+$/.test(key)) {
+        openTicketKey(key);
+      }
+    };
+    window.addEventListener(UI_EVENTS.openCase, onOpenCase);
+    return () => window.removeEventListener(UI_EVENTS.openCase, onOpenCase);
+  }, [openTicketKey]);
 
   const closePanel = useCallback(() => {
     if (!openKey) {

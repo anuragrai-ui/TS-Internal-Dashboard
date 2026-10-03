@@ -1,5 +1,6 @@
 import { after, NextResponse } from "next/server";
 
+import { syncTick } from "@/lib/cases/jiraSync";
 import { requireIdentity } from "@/lib/currentIdentity";
 import { maybeRunEscalations } from "@/lib/escalation/runner";
 import { maybeSyncJiraNotifications } from "@/lib/notifications/jiraSync";
@@ -59,6 +60,8 @@ export async function GET(request: Request): Promise<NextResponse> {
     } catch (error) {
       console.warn("Tracker snapshot rebuild failed; the previous snapshot stays up.", error instanceof Error ? error.message : error);
     }
+    /* Case store sync (Postgres): throttled to once every 2 minutes, ~40s budget, never throws; a no-op without DATABASE_URL. */
+    await syncTick({ trigger: "poll" });
     try {
       await slackBackfillTick();
     } catch (error) {

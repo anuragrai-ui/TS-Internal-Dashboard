@@ -13,6 +13,7 @@
     "start": "next start -H 127.0.0.1 -p 8000",
     "test:agent-followups": "npx tsx scripts/test-agent-followups.ts",
     "test:agent-tools": "npx tsx scripts/test-agent-tools.ts",
+    "test:cases": "npx tsx scripts/test-cases.ts",
     "test:closure-logic": "npx tsx scripts/test-closure-logic.ts",
     "test:escalation": "npx tsx scripts/test-escalation.ts",
     "test:escalation-pilot": "for t in readonly-jira business-hours sla classify plan state-machine runner; do npx tsx scripts/test-escalation-$t.ts || exit 1; done",
@@ -36,6 +37,7 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
     "@upstash/redis": "^1.38.3",
     "@vercel/connect": "2.3.5",
     "@vercel/oidc": "3.8.9",

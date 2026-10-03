@@ -236,3 +236,142 @@ export async function findSlackUserIdByName(displayName: string): Promise<string
     return null;
   }
 }
+
+/* ------------------------------------------------------------- read-only */
+
+/* The only Slack Web API methods the escalation tracker may call - all reads. Nothing here can post, react or join. */
+export type SlackReadMethod =
+  | "chat.getPermalink"
+  | "conversations.history"
+  | "conversations.info"
+  | "conversations.replies"
+  | "users.conversations"
+  | "users.info";
+
+export interface SlackReadResult<T> {
+  data: T | null;
+  /* Slack's error code ("not_in_channel", "missing_scope"...), or "no_token" / "request_failed". */
+  error?: string;
+  ok: boolean;
+  /* Slack said "ratelimited" (HTTP 429). The Vercel-managed app may get only one history/replies call a minute. */
+  rateLimited: boolean;
+  retryAfterSeconds?: number;
+}
+
+/**
+ * One read-only Slack Web API call. Never throws: a missing token, a
+ * network failure, a 429 or Slack's own {ok:false} all come back as a
+ * result the caller can degrade on - the tracker treats Slack as optional.
+ */
+export async function slackRead<T extends { error?: string; ok: boolean }>(
+  method: SlackReadMethod,
+  params: Record<string, string>,
+): Promise<SlackReadResult<T>> {
+  const token = await getSlackBotToken();
+
+  if (!token) {
+    return { data: null, error: "no_token", ok: false, rateLimited: false };
+  }
+
+  try {
+    const url = new URL(`https://slack.com/api/${method}`);
+    for (const [name, value] of Object.entries(params)) {
+      url.searchParams.set(name, value);
+    }
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) });
+    const retryAfter = Number(response.headers.get("retry-after"));
+    const retryAfterSeconds = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined;
+
+    if (response.status === 429) {
+      return { data: null, error: "ratelimited", ok: false, rateLimited: true, retryAfterSeconds: retryAfterSeconds ?? 60 };
+    }
+
+    const data = (await response.json()) as T;
+
+    if (!data.ok) {
+      const rateLimited = data.error === "ratelimited";
+      return { data, error: data.error ?? "unknown", ok: false, rateLimited, retryAfterSeconds: rateLimited ? (retryAfterSeconds ?? 60) : undefined };
+    }
+
+    return { data, ok: true, rateLimited: false };
+  } catch (error) {
+    console.warn(`Slack ${method} request failed.`, error instanceof Error ? error.message : error);
+    return { data: null, error: "request_failed", ok: false, rateLimited: false };
+  }
+}
+
+/* A channel's name hardly ever changes; a day keeps conversations.info off the hot path of every event. */
+const SLACK_CHANNEL_NAME_TTL_SECONDS = 86_400;
+
+/** A channel's name (conversations.info), cached a day. Undefined - never throws - when Slack won't say (a private channel without groups:read). */
+export async function getSlackChannelName(channel: string): Promise<string | undefined> {
+  if (!/^[CGD][A-Z0-9]{6,}$/.test(channel)) {
+    return undefined;
+  }
+
+  const cacheKey = `slack_channel_name:${channel}`;
+  const cached = await getCache<string | null>(cacheKey);
+
+  if (cached) {
+    return cached.value ?? undefined;
+  }
+
+  const result = await slackRead<{ channel?: { name?: string }; error?: string; ok: boolean }>("conversations.info", { channel });
+
+  if (result.rateLimited || result.error === "no_token" || result.error === "request_failed") {
+    /* Transient - try again next time rather than remembering "no name" for a day. */
+    return undefined;
+  }
+
+  const name = result.ok ? result.data?.channel?.name : undefined;
+  await setCache<string | null>(cacheKey, name ?? null, SLACK_CHANNEL_NAME_TTL_SECONDS);
+  return name;
+}
+
+export interface SlackBotChannel {
+  id: string;
+  name?: string;
+}
+
+/* Membership changes when someone invites the bot; an hour is fresh enough for the history drip. */
+const SLACK_BOT_CHANNELS_TTL_SECONDS = 3_600;
+const MAX_BOT_CHANNEL_PAGES = 5;
+
+/** Public channels the bot is a member of (users.conversations), cached an hour. Empty - never throws - when Slack won't say. */
+export async function listSlackBotChannels(): Promise<SlackBotChannel[]> {
+  const cacheKey = "slack_bot_channels:public";
+  const cached = await getCache<SlackBotChannel[]>(cacheKey);
+
+  if (cached) {
+    return cached.value;
+  }
+
+  type Page = { channels?: Array<{ id?: string; name?: string }>; error?: string; ok: boolean; response_metadata?: { next_cursor?: string } };
+  const channels: SlackBotChannel[] = [];
+  let cursor: string | undefined;
+
+  for (let page = 0; page < MAX_BOT_CHANNEL_PAGES; page += 1) {
+    const result = await slackRead<Page>("users.conversations", {
+      exclude_archived: "true",
+      limit: "200",
+      types: "public_channel",
+      ...(cursor ? { cursor } : {}),
+    });
+    if (!result.ok || !result.data) {
+      /* A partial list is still useful, but don't cache a failure as "no channels" for an hour. */
+      return channels;
+    }
+    for (const channel of result.data.channels ?? []) {
+      if (channel.id) {
+        channels.push({ id: channel.id, name: channel.name });
+      }
+    }
+    cursor = result.data.response_metadata?.next_cursor || undefined;
+    if (!cursor) {
+      break;
+    }
+  }
+
+  await setCache(cacheKey, channels, SLACK_BOT_CHANNELS_TTL_SECONDS);
+  return channels;
+}

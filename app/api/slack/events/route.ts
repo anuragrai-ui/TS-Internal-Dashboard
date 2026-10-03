@@ -6,22 +6,15 @@ import { getRedis, isRedisConfigured } from "@/lib/redis";
 import { recordInboundSlackEvent } from "@/lib/slackInboundLog";
 import { authenticateSlackRequest } from "@/lib/slackRequestAuth";
 
+import type { SlackInboundEvent } from "@/lib/notifications/slack";
+
 const TICKET_KEY_PATTERN = /\b(?:TS|CP)-\d+\b/g;
 const MENTION_TTL_SECONDS = 30 * 24 * 60 * 60;
 const MAX_MENTIONS_PER_TICKET = 10;
 
-interface SlackEvent {
-  bot_id?: string;
-  channel?: string;
-  item?: { channel?: string; ts?: string; type?: string };
-  reaction?: string;
-  user?: string;
-  subtype?: string;
-  text?: string;
-  thread_ts?: string;
-  ts?: string;
-  type?: string;
-}
+/* The whole event goes through untouched - blocks, attachments, and an edit's inner `message` included -
+   because the tracker's Slack index (src/lib/tracker/slackIndex.ts) finds ticket keys in all of them. */
+type SlackEvent = SlackInboundEvent;
 
 interface SlackEventPayload {
   /* Interactivity payloads (block_actions etc.) carry these instead of `event`. */
@@ -134,8 +127,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     via: auth.via,
   });
 
-  /* Thread replies, reactions and ticket mentions -> the notification center (src/lib/notifications/slack.ts).
-     Runs after the response so Slack/Connect get their 200 at once and never retry for a slow Jira lookup. */
+  /* Thread replies, reactions and ticket mentions -> the tracker's Slack index, then the notification center
+     (src/lib/notifications/slack.ts). Runs after the response so Slack/Connect get their 200 at once and never
+     retry for a slow Jira lookup. */
   if (payload.type === "event_callback" && payload.event) {
     const event = payload.event;
     after(() => notifyFromSlackEvent(event));

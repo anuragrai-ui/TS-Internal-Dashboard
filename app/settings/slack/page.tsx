@@ -2,11 +2,15 @@ import Link from "next/link";
 
 import { Icon } from "@/components/Icon";
 import { IdentityRequired } from "@/components/IdentityRequired";
+import { SlackHistoryProbe } from "@/components/SlackHistoryProbe";
 import { SlackTestPanel } from "@/components/SlackTestPanel";
 import { getCurrentIdentity } from "@/lib/currentIdentity";
 import { checkSlackConnection } from "@/lib/slackConnect";
 import { getRecentInboundSlackEvents } from "@/lib/slackInboundLog";
 import { getSlackTestChannel } from "@/lib/slackTestMode";
+import { getSlackBackfillStatus } from "@/lib/tracker/slackBackfill";
+
+import type { SlackBackfillChannelState } from "@/lib/tracker/slackBackfill";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +18,9 @@ export const dynamic = "force-dynamic";
 const NEEDED_SCOPES: Array<{ scope: string; why: string }> = [
   { scope: "chat:write", why: "post alerts and escalation threads" },
   { scope: "chat:write.public", why: "post in public pod channels without an invite" },
-  { scope: "channels:read", why: "check public channel access" },
-  { scope: "channels:history", why: "recover threads after a failure (public)" },
-  { scope: "groups:history", why: "recover threads after a failure (private)" },
+  { scope: "channels:read", why: "check public channel access; list the channels the tracker reads" },
+  { scope: "channels:history", why: "recover threads after a failure; show ticket conversations in the tracker (public)" },
+  { scope: "groups:history", why: "recover threads after a failure; show ticket conversations in the tracker (private)" },
   { scope: "reactions:read", why: "acknowledge escalations with a ✅ reaction" },
   { scope: "users:read", why: "look up people for @-mentions" },
   { scope: "users:read.email", why: "match people by email (optional)" },
@@ -30,10 +34,25 @@ function formatTime(iso: string): string {
     : new Date(parsed).toLocaleString("en-US", { day: "numeric", hour: "numeric", minute: "2-digit", month: "short", timeZone: "America/New_York" }) + " ET";
 }
 
+function backfillProgress(channel: SlackBackfillChannelState): React.ReactElement {
+  if (channel.error && channel.done) {
+    return <span className="status-badge tone-danger">Skipped ({channel.error})</span>;
+  }
+  if (channel.done) {
+    return <span className="status-badge tone-success">Caught up</span>;
+  }
+  if (channel.error) {
+    return <span className="status-badge tone-warning">Retrying ({channel.error})</span>;
+  }
+  return <span className="status-badge tone-accent">{channel.cursor ? "In progress" : "Queued"}</span>;
+}
+
 export default async function SlackSettingsPage(): Promise<React.ReactElement> {
   const identity = await getCurrentIdentity();
   const testChannel = getSlackTestChannel();
-  const [report, events] = identity ? await Promise.all([checkSlackConnection(), getRecentInboundSlackEvents()]) : [null, []];
+  const [report, events, backfill] = identity
+    ? await Promise.all([checkSlackConnection(), getRecentInboundSlackEvents(), getSlackBackfillStatus()])
+    : [null, [], null];
   const granted = new Set(report?.scopes ?? []);
 
   return (
@@ -169,6 +188,54 @@ export default async function SlackSettingsPage(): Promise<React.ReactElement> {
             </p>
           </div>
           <SlackTestPanel testChannel={testChannel} />
+
+          <div className="page-title-group">
+            <h2 className="page-title" style={{ fontSize: "1.05rem" }}>
+              Ticket conversations (escalation tracker)
+            </h2>
+            <p className="page-subtitle">
+              The tracker links Slack threads to tickets from live messages and from a slow walk of the last 30 days of history in every
+              channel the bot is in - one page about every 70 seconds, pausing whenever Slack asks it to. Only pointers and counts are kept;
+              a thread&apos;s messages are read live when someone opens it. The walk finds threads whose first message names a ticket; one that only names it in a reply shows up once someone replies, or when its link is pasted into a Jira comment or the tracker.
+              {backfill?.backoffUntil && Date.parse(backfill.backoffUntil) > Date.now() ? ` Slack asked to slow down until ${formatTime(backfill.backoffUntil)}.` : ""}
+              {backfill?.lastTickAt ? ` Last step ${formatTime(backfill.lastTickAt)}.` : ""}
+            </p>
+          </div>
+          <SlackHistoryProbe />
+          {!backfill || backfill.channels.length === 0 ? (
+            <div className="empty-state">No history walked yet - it starts with the tracker&apos;s next refresh.</div>
+          ) : (
+            <div className="table-scroll">
+              <table className="data-table">
+                <caption className="visually-hidden">Slack history backfill progress per channel</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Channel</th>
+                    <th scope="col">Progress</th>
+                    <th scope="col">Messages read</th>
+                    <th scope="col">Conversations linked</th>
+                    <th scope="col">Last page</th>
+                    <th scope="col">Last read</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {backfill.channels.map((channel) => (
+                    <tr key={channel.channel}>
+                      <td>
+                        {channel.name ? `#${channel.name}` : channel.channel}
+                        {channel.passes > 0 ? <span className="cell-sub"> {channel.passes} pass{channel.passes === 1 ? "" : "es"}</span> : null}
+                      </td>
+                      <td>{backfillProgress(channel)}</td>
+                      <td className="cell-muted">{channel.messagesScanned}</td>
+                      <td className="cell-muted">{channel.conversationsLinked}</td>
+                      <td className="cell-muted">{channel.lastPageSize ?? "—"}</td>
+                      <td className="cell-muted">{channel.lastScannedAt ? formatTime(channel.lastScannedAt) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <div className="page-title-group">
             <h2 className="page-title" style={{ fontSize: "1.05rem" }}>

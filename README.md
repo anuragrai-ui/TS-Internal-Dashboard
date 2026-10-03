@@ -191,7 +191,10 @@ npm run test:jira-comment-adf
 - `/api/slack/events` - POST, Slack Events API webhook (signature-verified)
 - `/notifications` - the full notification feed behind the header bell (see [Notification Center](#notification-center))
 - `/api/notifications` - GET, the bell's poll (also kicks off the throttled Jira sync and escalation run); `/api/notifications/read` - POST, mark read
-- `/escalations` - the engineering-escalation shadow run: how it works, on/off, Run now, every tracked thread
+- `/tracker` - the escalation tracker: every High/Critical TS ticket and everything waiting on engineering, with Slack conversations, SLA and CPs in one place (see [Escalation Tracker](#escalation-tracker))
+- `/api/tracker` - GET, the tracker list; `/api/tracker/[key]` - GET, one ticket's detail timeline; `/api/tracker/[key]/follow` - POST; `/api/tracker/[key]/slack` - POST, link a Slack thread by permalink; `/api/tracker/slack-thread` - GET, read a linked thread live; `/api/tracker/refresh` - POST
+- `/escalations` - the escalation bot (shadow run): how it works, on/off, Run now, every bot thread
+- `/api/settings/slack-connection/history-probe` - POST, checks whether Slack throttles the bot's history reads (counts only)
 - `/api/escalations/config` - POST, start/pause the shadow run; `/api/escalations/run` - POST, run once now
 
 ## Project Structure
@@ -419,7 +422,7 @@ The bell in the header (and the **Notifications** page) is a personal feed of wh
 - **Slack:** replies and reactions in threads the dashboard started (SLA-breach alerts, escalation threads, the Settings -> Slack test message), and messages mentioning a TS/CP key in channels the bot is in.
 - **Escalations:** new escalation threads, ladder levels, ✅ acknowledgements, fix ready and resolved.
 
-Notifications are per person. Only registered users (Jira Tokens page) get them, for the tickets assigned to them; the **Team** tab shows everyone's feed without unread state. Your own actions never notify you. TS sees ~700 ticket updates a day, so a team-wide unread count would just be noise.
+Notifications are per person. Only registered users (Jira Tokens page) get them, for the tickets assigned to them or that they follow on the [Escalation Tracker](#escalation-tracker); the **Team** tab shows everyone's feed without unread state. Your own actions never notify you. TS sees ~700 ticket updates a day, so a team-wide unread count would just be noise.
 
 **Live:** every open dashboard polls `/api/notifications` every 30 seconds (2 minutes in a background tab); an unchanged feed costs one Redis read. New items pop up as toasts under the header, and **Turn on desktop alerts** in the bell adds browser notifications for a background tab.
 
@@ -430,6 +433,42 @@ Notifications are per person. Only registered users (Jira Tokens page) get them,
 ```bash
 npm run notifications:preview -- --hours=24   # what the bell would have shown, from live Jira (read-only, stores nothing)
 npm run test:notifications
+```
+
+## Escalation Tracker
+
+`/tracker` keeps track of every escalation in one place, laid out like [Pylon](https://www.usepylon.com/): saved views with counts on the left, the ticket list (grouped by whose move it is) or a board in the middle, and a detail panel with a merged activity timeline and a properties sidebar (SLA, details, escalation signals, linked CPs, Slack conversations, bot escalation). It is read-only: Jira is only read, Slack is only read, and "Open in Jira / Open in Slack" links replace Pylon's write actions.
+
+**Scope:** TS Support Tickets (`issuetype = 10844`) that are open and High or Critical, or waiting for product at any priority, plus High/Critical closed in the last 7 days (~410 tickets). Operations Tickets are a separate population and aren't tracked.
+
+**How an escalation is recognised** - there is no escalation field in use (the Client Support Escalation, Major incident and Escalation Reason fields are empty), so the tracker reads what people actually do:
+
+| Tier | Signal | Source |
+| --- | --- | --- |
+| 1 (escalated to engineering) | Waiting for product, an open CP linked, a bot escalation thread, Time to Resolution breached | status 10633, issue links, escalation bot records, `cf[10650]` |
+| 2 (escalated by a person) | priority raised in the last 30 days, "escalat..." in a comment, a Slack conversation about it, a Slack link pasted in a comment, resolution SLA under 8h | changelog JQL, comment JQL, the Slack index |
+| 3 (context) | first-response SLA breached, negative sentiment | `cf[10059]`, `cf[10251]` |
+
+**Whose move:** New (To-do, Triaging), On TS, Waiting on engineering (WfP or an open CP), On operations, On customer (Waiting for client, Blocked - Client), Closed.
+
+**Slack conversations** - the bot can't use Slack search (that needs a user token), so conversations are found four ways and stored as pointers (channel, thread, counts, a short snippet; message text is read live and cached for a minute at most):
+- live message events in every channel the bot is in: any TS/CP key in the text, link URLs, rich-text blocks or attachments links that thread to the ticket, and later replies in the thread count as activity even when they don't repeat the key (a CP key that first appears in a reply attaches to the thread root);
+- Slack permalinks people paste into Jira comments (read during the tracker refresh, at most 25 tickets' comments per refresh);
+- "Link a Slack thread" in the detail panel (paste a permalink);
+- a history drip over the bot's channels (30 days back, one `conversations.history` call at most every ~70 seconds, backing off when Slack rate-limits). Settings -> Slack -> "Check Slack history access" tells whether Slack throttles the Vercel-managed app (1 call a minute, 15 messages) and shows backfill progress. The walk finds threads whose first message names a ticket; one that only names it in a reply shows up once someone replies, or when its link is pasted.
+
+Invite the bot (`/invite @ts-internal-dashboard`) to every channel where tickets are escalated - #technical-support, the customer-* channels and the pod channels - it only sees channels it is in. Direct messages are never indexed, and #ticket_update_2days is excluded (a digest bot); add more excluded channels with `SLACK_INDEX_EXCLUDE_CHANNELS` (comma-separated ids).
+
+**Notifications:** replies in a linked Slack conversation, mentions of a ticket in Slack, and a ticket's resolution SLA breaching or dropping under 2 hours all land in the bell for the ticket's registered assignee and anyone who follows it (star in the detail panel). Followers also get the ticket's Jira activity.
+
+**Refresh:** like the notification sync, nothing is scheduled (Vercel Hobby cron is daily). The bell's polls rebuild the snapshot at most every 5 minutes (~15 read-only Jira searches) and advance the Slack history drip; the Refresh button rebuilds on demand (at most every 30 seconds). Snapshot, Slack index and follows live in Redis (`tracker:*`, `slack:convo*`).
+
+**Quotas to watch:** Vercel Connect Hobby includes 1,000 forwarded Slack events and 500 token requests a month. Inviting the bot to busy channels raises the event count quickly; move to Pro or trim channels if the connector starts refusing.
+
+```bash
+npm run test:tracker
+npm run test:tracker-slack
+npm run test:tracker-views
 ```
 
 ## UI Design & Theming

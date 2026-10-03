@@ -19,11 +19,12 @@ const SECTION_TITLES: Record<string, string> = {
   "agent-followups": "Agent Follow-Ups",
   backlog: "Team Sheet Backlog",
   "closure-candidates": "Closure Candidates",
-  escalations: "Escalations",
+  escalations: "Escalation bot",
   history: "History",
   notifications: "Notifications",
   "sheet-followups": "Sheet AI Follow-Ups",
   "sla-followups": "SLA Follow-Ups",
+  tracker: "Escalation tracker",
   "weekly-closures": "Weekly Closures",
 };
 

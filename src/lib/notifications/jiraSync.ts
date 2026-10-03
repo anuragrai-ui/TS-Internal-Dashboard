@@ -3,6 +3,7 @@ import { searchByKeys } from "@/lib/escalation/sweep";
 import { notificationsFromJiraChanges } from "@/lib/notifications/jiraChanges";
 import { addNotifications } from "@/lib/notifications/store";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
+import { getFollowersForAccounts } from "@/lib/tracker/follow";
 import { listRegisteredJiraUsers } from "@/lib/userJiraTokens";
 
 import type { ReadOnlyJiraClient } from "@/lib/escalation/readOnlyJira";
@@ -20,6 +21,10 @@ import type { AppNotification } from "@/lib/notifications/types";
  * Reads go through the escalation pilot's read-only Jira client, so a sync
  * can't write to Jira even by mistake. It only asks for what a notification
  * shows: keys, statuses, assignees, summaries and the newest comments.
+ *
+ * Besides tickets assigned to registered users, it watches the tickets they
+ * follow on the escalation tracker (src/lib/tracker/follow.ts), capped so
+ * the `key in (...)` clause stays a sane size.
  */
 
 const CURSOR_KEY = "notif:jira:cursor";
@@ -33,6 +38,8 @@ const FIRST_RUN_LOOKBACK_MS = 15 * 60_000;
 const MAX_LOOKBACK_MS = 24 * 3_600_000;
 const COMMENTS_PER_ISSUE = 10;
 const COMMENT_FETCH_CONCURRENCY = 4;
+/* Followed TS keys added to the TS query; the rest still get CP and Slack notifications. */
+const MAX_FOLLOWED_KEYS = 200;
 
 const TS_FIELDS = ["assignee", "reporter", "status", "summary", "updated"];
 const CP_LIGHT_FIELDS = ["issuelinks", "updated"];
@@ -56,6 +63,14 @@ export interface JiraSyncResult {
   skipped?: "already_running" | "no_registered_users" | "throttled" | "unconfigured";
   ticketsWatched: number;
   windowMinutes: number;
+}
+
+/* Newest key numbers first: when the cap bites, it's the long-quiet old tickets that drop out. */
+export function followedTsKeysForQuery(followersByKey: ReadonlyMap<string, string[]>, cap: number = MAX_FOLLOWED_KEYS): string[] {
+  return [...followersByKey.keys()]
+    .filter((key) => /^TS-\d+$/.test(key))
+    .sort((a, b) => Number(b.slice(3)) - Number(a.slice(3)))
+    .slice(0, cap);
 }
 
 /* Account ids are opaque ("557058:1b2c..." or hex), so they're quoted rather than trusted bare in JQL. */
@@ -97,34 +112,43 @@ export interface CollectedJiraNotifications {
 export async function collectJiraNotifications(args: {
   baseUrl: string;
   client: ReadOnlyJiraClient;
+  /* Tracker followers per key (registered users only). Optional: without it, only assignees are watched. */
+  followersByKey?: ReadonlyMap<string, string[]>;
   nowMs: number;
   sinceMs: number;
   users: Array<{ accountId: string }>;
 }): Promise<CollectedJiraNotifications> {
   const { baseUrl, client, nowMs, sinceMs, users } = args;
+  const followersByKey = args.followersByKey ?? new Map<string, string[]>();
   /* Relative JQL dates ("-17m") are evaluated by Jira itself, so the service account's profile timezone can't skew the window. */
   const windowMinutes = Math.max(1, Math.ceil((nowMs - sinceMs) / 60_000));
   const registered = new Set(users.map((user) => user.accountId));
   const assignees = users.map((user) => jqlString(user.accountId)).join(", ");
+  const followedTs = followedTsKeysForQuery(followersByKey);
+  /* Keys are validated (^TS-\d+$) before they get here, so they go into JQL bare. */
+  const tsWho = followedTs.length > 0 ? `(assignee in (${assignees}) OR key in (${followedTs.join(", ")}))` : `assignee in (${assignees})`;
 
   /* Newest first: if a long catch-up (a quiet night, up to a day) hits the cap, it's the oldest changes that get dropped. */
   const [tsIssues, cpLight] = await Promise.all([
     client.searchJql<RawIssue>(
-      `project = TS AND assignee in (${assignees}) AND updated >= -${windowMinutes}m ORDER BY updated DESC`,
+      `project = TS AND ${tsWho} AND updated >= -${windowMinutes}m ORDER BY updated DESC`,
       TS_FIELDS,
       { expand: "changelog", maxTotal: 200 },
     ),
     client.searchJql<RawIssue>(`project = CP AND updated >= -${windowMinutes}m ORDER BY updated DESC`, CP_LIGHT_FIELDS, { maxTotal: 300 }),
   ]);
 
-  /* A CP only matters here if a registered user's TS ticket links to it. */
+  /* A CP only matters here if a registered user's TS ticket links to it, or someone follows it or one of those tickets. */
   const cpToTs = new Map(cpLight.map((cp) => [cp.key, linkedKeys(cp, "TS-")]));
   const linkedTsKeys = [...new Set([...cpToTs.values()].flat())];
   const ownedLinkedTs = await searchByKeys<RawIssue>(client, linkedTsKeys, ["assignee"], { extraJql: ` AND assignee in (${assignees})` });
   const ownerByTs = new Map(
     ownedLinkedTs.flatMap((issue) => (issue.fields.assignee?.accountId ? [[issue.key, issue.fields.assignee.accountId] as const] : [])),
   );
-  const relevantCpKeys = [...cpToTs.entries()].filter(([, tsKeys]) => tsKeys.some((key) => ownerByTs.has(key))).map(([key]) => key);
+  const listenedTo = (key: string): boolean => ownerByTs.has(key) || followersByKey.has(key);
+  const relevantCpKeys = [...cpToTs.entries()]
+    .filter(([cpKey, tsKeys]) => followersByKey.has(cpKey) || tsKeys.some(listenedTo))
+    .map(([key]) => key);
   const cpIssues = relevantCpKeys.length > 0 ? await searchByKeys<RawIssue>(client, relevantCpKeys, CP_FIELDS, { expand: "changelog" }) : [];
 
   /* Comments aren't in the changelog: one small read per issue that changed inside the window. */
@@ -160,11 +184,11 @@ export async function collectJiraNotifications(args: {
     baseUrl,
     cps: cpIssues.map((cp) => ({
       issue: toWatched(cp),
-      linkedTickets: (cpToTs.get(cp.key) ?? []).flatMap((key): LinkedTicket[] => {
-        const owner = ownerByTs.get(key);
-        return owner ? [{ assigneeAccountId: owner, key }] : [];
-      }),
+      linkedTickets: (cpToTs.get(cp.key) ?? []).flatMap((key): LinkedTicket[] =>
+        listenedTo(key) ? [{ assigneeAccountId: ownerByTs.get(key) ?? null, key }] : [],
+      ),
     })),
+    followersByKey,
     registeredAccountIds: registered,
     sinceMs,
     tickets: tsIssues.map(toWatched),
@@ -207,6 +231,7 @@ export async function syncJiraNotifications(now: Date = new Date()): Promise<Jir
     const collected = await collectJiraNotifications({
       baseUrl: config.baseUrl,
       client: createReadOnlyJiraClient(config),
+      followersByKey: await getFollowersForAccounts(users.map((user) => user.accountId)),
       nowMs,
       sinceMs,
       users,

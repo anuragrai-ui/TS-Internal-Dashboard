@@ -31,16 +31,16 @@ assert(
   ":root should declare light dark color-scheme support",
 );
 assert(
-  rootBlock.includes("--bg: #f7f8fa"),
-  "Light mode background should be the enterprise light gray (#f7f8fa)",
+  rootBlock.includes("--bg: #f6f7f9"),
+  "Light mode background should be the Pylon-style cool gray canvas (#f6f7f9)",
 );
 assert(
   rootBlock.includes("--surface: #ffffff"),
   "Light mode surface should be white (#ffffff)",
 );
 assert(
-  rootBlock.includes("--accent: #0c66e4"),
-  "Light mode accent should be the enterprise blue (#0c66e4)",
+  rootBlock.includes("--accent: #4f46e5"),
+  "Light mode accent should be the Pylon-style indigo (#4f46e5)",
 );
 
 const darkBlock = extractRuleBlock(':root[data-theme="dark"] {');
@@ -49,12 +49,12 @@ assert(
   "Dark mode should set color-scheme to dark",
 );
 assert(
-  darkBlock.includes("--bg: #161a1d"),
-  "Dark mode background should be the enterprise dark neutral (#161a1d)",
+  darkBlock.includes("--bg: #0f1115"),
+  "Dark mode background should be the Pylon-style dark neutral (#0f1115)",
 );
 assert(
-  darkBlock.includes("--accent: #4c9aff"),
-  "Dark mode accent should be the enterprise dark-mode blue (#4c9aff)",
+  darkBlock.includes("--accent: #818cf8"),
+  "Dark mode accent should be the Pylon-style dark-mode indigo (#818cf8)",
 );
 
 const lightOverride = extractRuleBlock(':root[data-theme="light"] {');
@@ -63,8 +63,8 @@ assert(
   "Light mode override should set color-scheme to light",
 );
 assert(
-  lightOverride.includes("--bg: #f7f8fa"),
-  "Light mode override should keep the enterprise light background",
+  lightOverride.includes("--bg: #f6f7f9"),
+  "Light mode override should keep the light canvas",
 );
 
 const appShell = extractRuleBlock(".app-shell {");

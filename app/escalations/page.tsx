@@ -58,10 +58,21 @@ export default async function EscalationsPage(): Promise<React.ReactElement> {
 
       <div className="page-header-row">
         <div className="page-title-group">
-          <h1 className="page-title">Engineering escalations</h1>
+          <h1 className="page-title">Escalation bot</h1>
           <p className="page-subtitle">
-            One Slack thread per CP that TS tickets are waiting on, escalated by SLA - piloting with the {pilotPod} pod. Jira is only ever read.
+            Settings and shadow run for the bot that opens one Slack thread per CP that TS tickets are waiting on, escalated by SLA - piloting
+            with the {pilotPod} pod. Jira is only ever read.
           </p>
+          <p className="page-subtitle">
+            Looking for every High/Critical ticket, manual escalations and their Slack conversations? They live in the{" "}
+            <Link href="/tracker">Escalation tracker</Link>.
+          </p>
+        </div>
+        <div className="page-actions">
+          <Link className="btn" href="/tracker">
+            <Icon name="inbox" size={14} />
+            Open the tracker
+          </Link>
         </div>
       </div>
 
@@ -167,7 +178,7 @@ export default async function EscalationsPage(): Promise<React.ReactElement> {
 
           <div className="page-title-group">
             <h2 className="page-title" style={{ fontSize: "1.05rem" }}>
-              Escalations
+              Bot escalations
             </h2>
           </div>
           {rows.length === 0 ? (

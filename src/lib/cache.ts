@@ -74,6 +74,28 @@ export async function setCache<T>(
   }
 }
 
+/** getCache for many keys in one Redis command (MGET). Entries line up with `keys`; a miss or expired entry is null. Never throws. */
+export async function getCacheMany<T>(keys: string[]): Promise<Array<CacheEntry<T> | null>> {
+  if (keys.length === 0 || !isRedisConfigured()) {
+    return keys.map(() => null);
+  }
+
+  try {
+    const stored = await getRedis().mget<Array<StoredCacheEntry<T> | null>>(...keys.map(toRedisKey));
+    return keys.map((_key, index) => {
+      const entry = stored[index];
+      if (!entry) {
+        return null;
+      }
+      const expiresAt = new Date(entry.expiresAt);
+      return Date.now() >= expiresAt.getTime() ? null : { createdAt: new Date(entry.createdAt), expiresAt, value: entry.value };
+    });
+  } catch (error) {
+    console.warn("Cache multi-read failed; treating every key as a cache miss.", error);
+    return keys.map(() => null);
+  }
+}
+
 export async function getCacheMeta(
   key: string,
 ): Promise<Pick<CacheEntry<unknown>, "createdAt" | "expiresAt"> | null> {
@@ -103,5 +125,18 @@ export async function clearCache(): Promise<void> {
     }
   } catch (error) {
     console.warn("Cache clear failed; cached entries will expire on their own TTL instead.", error);
+  }
+}
+
+/** Drop one cached entry now, so the next read recomputes it. Never throws. */
+export async function deleteCache(key: string): Promise<void> {
+  if (!isRedisConfigured()) {
+    return;
+  }
+
+  try {
+    await getRedis().del(toRedisKey(key));
+  } catch (error) {
+    console.warn(`Cache delete failed for "${key}"; the entry expires on its own.`, error);
   }
 }

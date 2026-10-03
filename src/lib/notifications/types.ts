@@ -7,6 +7,11 @@
  * - CPs: engineering activity on the CPs those tickets wait on
  * - Slack: replies and reactions in threads the dashboard started (SLA-breach
  *   alerts, escalation threads), plus ticket-key mentions in channels the bot is in
+ * - Tracker: resolution SLAs breaching or about to, on tickets the escalation
+ *   tracker watches (src/lib/tracker/signals.ts)
+ *
+ * Besides a ticket's registered assignee, anyone who follows it on the
+ * escalation tracker (src/lib/tracker/follow.ts) hears about it too.
  *
  * Notifications are personal: each one names the registered dashboard users
  * it is for (`audience`, Jira accountIds), so the badge only counts what
@@ -32,7 +37,9 @@ export type NotificationKind =
   | "jira_status"
   | "slack_mention"
   | "slack_reaction"
-  | "slack_reply";
+  | "slack_reply"
+  /* Escalation tracker: a High/Critical ticket's resolution SLA just breached or dropped under 2h. */
+  | "tracker_sla";
 
 export interface AppNotification {
   /* Who did it, as displayed ("Jane Doe"). */

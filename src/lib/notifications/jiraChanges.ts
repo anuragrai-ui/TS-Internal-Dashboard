@@ -22,6 +22,11 @@ import type { AppNotification } from "@/lib/notifications/types";
  *   CP assignee
  * A person's own actions never notify them, and Jira automation ("app"
  * accounts) comments are skipped as noise.
+ *
+ * Followers (people who follow a ticket on the escalation tracker,
+ * src/lib/tracker/follow.ts) hear about a TS ticket like its assignee does,
+ * and about the CPs linked to the tickets they follow (or a CP they follow
+ * directly). "Assigned to you" stays the new assignee's alone.
  */
 
 export interface JiraUserRef {
@@ -65,18 +70,21 @@ export interface WatchedIssue {
 }
 
 export interface LinkedTicket {
-  assigneeAccountId: string;
+  /* Null when only followers are listening (the assignee isn't a registered user, or wasn't looked up). */
+  assigneeAccountId: string | null;
   key: string;
 }
 
 export interface JiraChangeInput {
   baseUrl: string;
-  /* CPs updated in the window, each with the registered-user-owned TS tickets that link to it. */
+  /* CPs updated in the window, each with the registered-user-owned (or followed) TS tickets that link to it. */
   cps: Array<{ issue: WatchedIssue; linkedTickets: LinkedTicket[] }>;
+  /* Tracker followers per TS/CP key. Only registered followers are ever notified. */
+  followersByKey?: ReadonlyMap<string, string[]>;
   registeredAccountIds: ReadonlySet<string>;
   /* Only history items and comments created at or after this instant count. */
   sinceMs: number;
-  /* TS tickets updated in the window and currently assigned to a registered user. */
+  /* TS tickets updated in the window and currently assigned to a registered user, or followed by one. */
   tickets: WatchedIssue[];
 }
 
@@ -104,12 +112,20 @@ export function notificationsFromJiraChanges(input: JiraChangeInput): AppNotific
   return out.filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)));
 }
 
+/* Registered followers of a key, in a stable order. */
+function followersOf(key: string, input: JiraChangeInput): string[] {
+  return [...new Set(input.followersByKey?.get(key) ?? [])].filter((id) => input.registeredAccountIds.has(id)).sort();
+}
+
 /* ------------------------------------------------------------------- TS */
 
 function ticketNotifications(ticket: WatchedIssue, input: JiraChangeInput): AppNotification[] {
-  const owner = ticket.assignee?.accountId;
+  const assignee = ticket.assignee?.accountId;
+  const owner = assignee && input.registeredAccountIds.has(assignee) ? assignee : undefined;
+  /* Owner first, so a ticket nobody follows keeps exactly the audience it always had. */
+  const listeners = [...new Set([...(owner ? [owner] : []), ...followersOf(ticket.key, input)])];
 
-  if (!owner || !input.registeredAccountIds.has(owner)) {
+  if (listeners.length === 0) {
     return [];
   }
 
@@ -122,7 +138,8 @@ function ticketNotifications(ticket: WatchedIssue, input: JiraChangeInput): AppN
 
   for (const history of ticket.histories) {
     const at = instantInWindow(history.created, input.sinceMs);
-    if (at === null || history.author?.accountId === owner) {
+    const audience = listeners.filter((id) => id !== history.author?.accountId);
+    if (at === null || audience.length === 0) {
       continue;
     }
     const actor = history.author?.displayName;
@@ -132,7 +149,7 @@ function ticketNotifications(ticket: WatchedIssue, input: JiraChangeInput): AppN
     for (const item of history.items ?? []) {
       const field = item.fieldId ?? item.field ?? "";
       const id = `jira:${ticket.key}:h${history.id ?? at}:${field}`;
-      const base = { actor, at, audience: [owner], id, source: "jira" as const, ticketKey: ticket.key, url };
+      const base = { actor, at, audience, id, source: "jira" as const, ticketKey: ticket.key, url };
 
       if (field === "status") {
         if (!automationEcho) {
@@ -144,14 +161,31 @@ function ticketNotifications(ticket: WatchedIssue, input: JiraChangeInput): AppN
             title: `${ticket.key} moved to ${item.toString ?? "a new status"}`,
           });
         }
-      } else if (field === "assignee" && item.to === owner) {
-        out.push({
-          ...base,
-          detail: ticket.summary,
-          important: true,
-          kind: "jira_assigned",
-          title: `${ticket.key} was assigned to you`,
-        });
+      } else if (field === "assignee") {
+        /* The new assignee is told it's theirs; followers just see who has it now. */
+        if (owner && item.to === owner && audience.includes(owner)) {
+          out.push({
+            ...base,
+            audience: [owner],
+            detail: ticket.summary,
+            important: true,
+            kind: "jira_assigned",
+            title: `${ticket.key} was assigned to you`,
+          });
+        }
+        /* Followers other than the new assignee; the owner's own rule above is unchanged. */
+        const watching = audience.filter((id) => id !== owner && id !== item.to);
+        if (watching.length > 0) {
+          out.push({
+            ...base,
+            audience: watching,
+            detail: ticket.summary,
+            id: `${id}:followers`,
+            important: false,
+            kind: "jira_assigned",
+            title: item.toString ? `${ticket.key} was assigned to ${item.toString}` : `${ticket.key} was unassigned`,
+          });
+        }
       } else if (field === "priority") {
         out.push({
           ...base,
@@ -180,28 +214,32 @@ function ticketNotifications(ticket: WatchedIssue, input: JiraChangeInput): AppN
   for (const comment of ticket.comments) {
     const at = instantInWindow(comment.created, input.sinceMs);
     const author = comment.author;
-    if (at === null || author?.accountId === owner || author?.accountType === "app") {
+    const audience = listeners.filter((id) => id !== author?.accountId);
+    if (at === null || audience.length === 0 || author?.accountType === "app") {
       continue;
     }
 
     const fromCustomer = isFromCustomer(comment, ticket);
-    const mentionsOwner = mentionedAccountIds(comment.body).has(owner);
+    const mentioned = mentionedAccountIds(comment.body);
+    const mentionedListeners = audience.filter((id) => mentioned.has(id));
+    /* "mentioned you" only when it's true for everyone the notification goes to. */
+    const mentionsEveryone = mentionedListeners.length > 0 && mentionedListeners.length === audience.length;
     const name = author?.displayName ?? (fromCustomer ? "The customer" : "Someone");
     const snippet = adfToText(comment.body, SNIPPET_MAX_CHARS);
 
     out.push({
       actor: author?.displayName,
       at,
-      audience: [owner],
+      audience,
       detail: comment.jsdPublic === false ? `Internal note: ${snippet}` : snippet,
       id: `jira:${ticket.key}:c${comment.id ?? at}`,
-      important: fromCustomer || mentionsOwner,
+      important: fromCustomer || mentionedListeners.length > 0,
       kind: fromCustomer ? "jira_customer_reply" : "jira_comment",
       source: "jira",
       ticketKey: ticket.key,
       title: fromCustomer
         ? `${name} replied on ${ticket.key}`
-        : mentionsOwner
+        : mentionsEveryone
           ? `${name} mentioned you on ${ticket.key}`
           : `${name} commented on ${ticket.key}`,
       url: comment.id ? `${url}?focusedCommentId=${encodeURIComponent(comment.id)}` : url,
@@ -214,16 +252,23 @@ function ticketNotifications(ticket: WatchedIssue, input: JiraChangeInput): AppN
 /* ------------------------------------------------------------------- CP */
 
 function cpNotifications(cp: WatchedIssue, linkedTickets: LinkedTicket[], input: JiraChangeInput): AppNotification[] {
-  const owners = [...new Set(linkedTickets.map((ticket) => ticket.assigneeAccountId))].filter((id) => input.registeredAccountIds.has(id));
+  /* Everyone listening through each linked TS ticket: its registered owner, then its followers. */
+  const listenersByTs = linkedTickets.map((ticket) => ({
+    key: ticket.key,
+    listeners: [
+      ...(ticket.assigneeAccountId && input.registeredAccountIds.has(ticket.assigneeAccountId) ? [ticket.assigneeAccountId] : []),
+      ...followersOf(ticket.key, input),
+    ],
+  }));
+  const owners = [...new Set([...listenersByTs.flatMap((entry) => entry.listeners), ...followersOf(cp.key, input)])];
 
   if (owners.length === 0) {
     return [];
   }
 
-  const tsKeys = [...new Set(linkedTickets.filter((ticket) => owners.includes(ticket.assigneeAccountId)).map((ticket) => ticket.key))].sort(
-    compareKeys,
-  );
-  const linkedTo = `linked to ${tsKeys.slice(0, 3).join(", ")}${tsKeys.length > 3 ? ` +${tsKeys.length - 3}` : ""}`;
+  const tsKeys = [...new Set(listenersByTs.filter((entry) => entry.listeners.length > 0).map((entry) => entry.key))].sort(compareKeys);
+  const linkedTo =
+    tsKeys.length > 0 ? `linked to ${tsKeys.slice(0, 3).join(", ")}${tsKeys.length > 3 ? ` +${tsKeys.length - 3}` : ""}` : "followed CP";
   const url = issueUrl(input.baseUrl, cp.key);
   const out: AppNotification[] = [];
 

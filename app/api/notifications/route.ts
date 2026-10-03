@@ -4,12 +4,15 @@ import { requireIdentity } from "@/lib/currentIdentity";
 import { maybeRunEscalations } from "@/lib/escalation/runner";
 import { maybeSyncJiraNotifications } from "@/lib/notifications/jiraSync";
 import { getFeedVersion, listNotifications } from "@/lib/notifications/store";
+import { slackBackfillTick } from "@/lib/tracker/slackIndex";
+import { maybeRefreshTrackerSnapshot } from "@/lib/tracker/snapshot";
 
 import type { FeedScope } from "@/lib/notifications/store";
 
 export const dynamic = "force-dynamic";
-/* The response goes out at once; this covers the Jira sync and escalation run that follow it (see below). */
-export const maxDuration = 120;
+/* The response goes out at once; this covers the Jira sync, escalation run, tracker rebuild and Slack backfill
+   step that follow it (see below). Each is throttled, so they rarely all land on the same poll. */
+export const maxDuration = 300;
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -20,9 +23,11 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * from one Redis read, which is what nearly every 30-second poll is.
  *
  * Every poll also offers to run the Jira notification sync (at most once a
- * minute across all browsers) and the escalation shadow run (at most once
- * every 10 minutes, only while it's switched on). Both run after the
- * response, so a poll never waits on Jira. That's what keeps things live on
+ * minute across all browsers), the escalation shadow run (at most once
+ * every 10 minutes, only while it's switched on), the escalation tracker's
+ * snapshot rebuild (at most once every 5 minutes) and one small step of the
+ * tracker's Slack history backfill. All run after the response, so a poll
+ * never waits on Jira or Slack. That's what keeps things live on
  * Vercel Hobby, where cron runs only once a day.
  */
 export async function GET(request: Request): Promise<NextResponse> {
@@ -48,6 +53,16 @@ export async function GET(request: Request): Promise<NextResponse> {
       await maybeRunEscalations();
     } catch (error) {
       console.warn("Escalation shadow run failed; the next one recomputes everything from Jira.", error instanceof Error ? error.message : error);
+    }
+    try {
+      await maybeRefreshTrackerSnapshot();
+    } catch (error) {
+      console.warn("Tracker snapshot rebuild failed; the previous snapshot stays up.", error instanceof Error ? error.message : error);
+    }
+    try {
+      await slackBackfillTick();
+    } catch (error) {
+      console.warn("Slack backfill step failed; the next poll picks up where it left off.", error instanceof Error ? error.message : error);
     }
   });
 

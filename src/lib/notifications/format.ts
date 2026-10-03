@@ -26,6 +26,7 @@ export function fullTime(iso: string): string {
 export function notificationIcon(item: Pick<NotificationView, "kind" | "source">): IconName {
   if (item.source === "slack") return "message";
   if (item.source === "escalation") return "zap";
+  if (item.kind === "tracker_sla") return "clock";
   if (item.kind === "jira_assigned" || item.kind === "cp_assigned") return "user";
   if (item.kind === "jira_status" || item.kind === "cp_status") return "refresh";
   return "ticket";

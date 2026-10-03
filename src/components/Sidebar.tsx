@@ -19,6 +19,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     items: [
       { href: "/", icon: "grid", label: "Dashboard" },
+      { href: "/tracker", icon: "inbox", label: "Escalation tracker" },
       { href: "/notifications", icon: "bell", label: "Notifications" },
       { href: "/backlog", icon: "layers", label: "Team Sheet Backlog" },
       { href: "/weekly-closures", icon: "chart", label: "Weekly Closures" },
@@ -39,7 +40,6 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/agent-followups", icon: "bot", label: "Agent Follow-Ups" },
       { href: "/sheet-followups", icon: "bot", label: "Sheet AI Follow-Ups" },
       { href: "/sla-followups", icon: "alert", label: "SLA Follow-Ups" },
-      { href: "/escalations", icon: "zap", label: "Escalations" },
       { href: "/closure-candidates", icon: "check-circle", label: "Closure Candidates" },
       { href: "/history", icon: "history", label: "History" },
     ],
@@ -49,6 +49,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/settings/jira-tokens", icon: "gear", label: "Jira Tokens" },
       { href: "/settings/slack", icon: "bot", label: "Slack" },
+      { href: "/escalations", icon: "zap", label: "Escalation bot" },
     ],
     label: "Settings",
   },

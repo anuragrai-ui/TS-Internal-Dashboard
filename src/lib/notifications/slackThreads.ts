@@ -1,4 +1,5 @@
 import { getRedis, isRedisConfigured } from "@/lib/redis";
+import { linkConversation } from "@/lib/tracker/slackIndex";
 
 /**
  * Memory of every Slack message the dashboard posted: (channel, ts) -> the
@@ -39,6 +40,12 @@ export async function rememberPostedSlackMessage(channel: string, ts: string, in
   } catch (error) {
     /* The post itself already succeeded; losing this only means its replies won't notify anyone. */
     console.warn(`Failed to remember Slack message ${channel}/${ts}; replies to it won't notify.`, error);
+  }
+
+  const ticketKeys = [...new Set([...info.ticketKeys, ...(info.cpKey ? [info.cpKey] : [])])];
+  if (info.threadTs === ts && ticketKeys.length > 0) {
+    /* Never throws; a miss only means the tracker learns about this thread from its first reply instead. */
+    await linkConversation({ channel, rootTs: ts, source: "bot", ticketKeys });
   }
 }
 

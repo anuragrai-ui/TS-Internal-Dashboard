@@ -20,6 +20,11 @@ function canUseConnect(): boolean {
   return process.env.VERCEL === "1" || Boolean(process.env.VERCEL_OIDC_TOKEN);
 }
 
+/* After Connect refuses a token (quota used up, connector detached, an outage) every Slack call in the poll loop would
+   ask again, each counting against Connect's monthly allowance. This instance sits it out for a couple of minutes. */
+const TOKEN_FAILURE_BACKOFF_MS = 120_000;
+let tokenFailedAt = 0;
+
 /** A Slack token for Web API calls, or null (never throws) when none can be obtained - callers degrade gracefully. */
 export async function getSlackBotToken(): Promise<string | null> {
   const override = process.env.SLACK_BOT_TOKEN;
@@ -30,9 +35,14 @@ export async function getSlackBotToken(): Promise<string | null> {
     return null;
   }
 
+  if (Date.now() - tokenFailedAt < TOKEN_FAILURE_BACKOFF_MS) {
+    return null;
+  }
+
   try {
     return await getToken(SLACK_CONNECTOR, { subject: { type: "app" } });
   } catch (error) {
+    tokenFailedAt = Date.now();
     console.warn(`Vercel Connect could not issue a Slack token for ${SLACK_CONNECTOR}.`, error instanceof Error ? error.message : error);
     return null;
   }

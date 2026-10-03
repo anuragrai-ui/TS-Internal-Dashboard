@@ -5,6 +5,13 @@ import type { SlaClock, SlaClockState } from "@/lib/cases/types";
 import type { BusinessCalendar, ParsedSla } from "@/lib/escalation/types";
 
 /**
+ * Bump whenever the clock rules change. The sync compares it with the version the stored clocks were computed with
+ * and, on a mismatch, walks every ticket again (the backfill re-reads unchanged tickets; the incremental sync skips them).
+ * 2: "Waiting for operations" pauses; a reopen never starts a new resolution cycle (matches JSM).
+ */
+export const SLA_RULES_VERSION = 2;
+
+/**
  * Our own SLA clocks, computed from the same history Jira's JSM SLAs see,
  * so we can prove parity before Jira stops being the source of truth.
  * Pure: no I/O, no clock reads (`nowMs` is passed in).
@@ -26,14 +33,18 @@ import type { BusinessCalendar, ParsedSla } from "@/lib/escalation/types";
  *
  * Time to resolution (cf[10650])
  * - Starts when the issue is created.
- * - Pauses while the ticket sits in Waiting for product (10633) or a
- *   waiting-for-customer/client status (matched by name - the ids differ
- *   per workflow and none are pinned in policy.ts).
- * - Stops when a resolution is set. If the changelog shows no resolution
- *   change at all but the issue is resolved, it stops at resolutiondate.
- * - A cleared resolution (a reopen) starts a NEW cycle from zero, the way a
- *   JSM SLA with "Resolution: Cleared" as a start condition does; Jira then
- *   reports the ongoing cycle, and so do we.
+ * - Pauses while the ticket sits in Waiting for product (10633), Waiting
+ *   for operations (10634) or a waiting-for-customer/client status (matched
+ *   by name - the ids differ per workflow and none are pinned in policy.ts).
+ *   Waiting for TS review (12772), triage and To-do statuses do NOT pause.
+ *   Confirmed 2026-10-03 against Jira's completed-cycle elapsedTime on
+ *   TS-79510, TS-88080, TS-93954, TS-103763: each matches to the second only
+ *   with Waiting for operations paused and Waiting for TS review running.
+ * - Stops at the FIRST resolution set and never restarts: JSM has no
+ *   "Resolution: Cleared" start condition here, so a reopened ticket keeps
+ *   its one completed cycle and no ongoing one (TS-48700, TS-87339,
+ *   TS-93340). If the changelog shows no resolution set at all but the
+ *   issue is resolved, it stops at resolutiondate.
  *
  * Time to first response (cf[10059])
  * - Starts when the issue is created, never pauses, and stops at the first
@@ -49,11 +60,14 @@ export type OurClock = Omit<SlaClock, "computedAt" | "jira" | "metric">;
    time; a few minutes also absorbs Jira rounding to the minute. */
 export const PARITY_TOLERANCE_MS = 5 * 60_000;
 
-const WAITING_ON_CUSTOMER = /^waiting\s+(?:for|on)\s+(?:the\s+)?(?:customer|client)s?$/i;
+/* "Waiting for operations" in the TS workflow, read from TS changelogs on 2026-10-03. */
+export const WAITING_FOR_OPERATIONS_STATUS_ID = "10634";
+const PAUSE_STATUS_IDS = new Set([WAITING_FOR_PRODUCT_STATUS_ID, WAITING_FOR_OPERATIONS_STATUS_ID]);
+const WAITING_ON_CUSTOMER = /^waiting\s+(?:for|on)\s+(?:the\s+)?(?:customer|client|operations)s?$/i;
 
 /** Whether the resolution clock pauses in this status. */
 export function isPauseStatus(statusId: string | null | undefined, statusName: string | null | undefined): boolean {
-  return statusId === WAITING_FOR_PRODUCT_STATUS_ID || (typeof statusName === "string" && WAITING_ON_CUSTOMER.test(statusName.trim()));
+  return (typeof statusId === "string" && PAUSE_STATUS_IDS.has(statusId)) || (typeof statusName === "string" && WAITING_ON_CUSTOMER.test(statusName.trim()));
 }
 
 /* ----------------------------------------------------------------- core */
@@ -208,10 +222,15 @@ export function computeResolutionClock(timeline: ResolutionTimeline, goalMs: num
   for (const change of statusChanges) {
     events.push({ atMs: parseInstant(change.at, "status change"), kind: isPauseStatus(change.toId, change.toName) ? "pause" : "resume" });
   }
-  for (const change of timeline.resolutionChanges) {
-    events.push({ atMs: parseInstant(change.at, "resolution change"), kind: change.set ? "stop" : "restart" });
-  }
-  if (timeline.resolutionChanges.length === 0 && timeline.resolvedAt) {
+  /* One cycle only: the first resolution set ends it for good, and a later
+     clear (a reopen) does not start another - see the module comment. */
+  const firstSetMs = timeline.resolutionChanges
+    .filter((change) => change.set)
+    .map((change) => parseInstant(change.at, "resolution change"))
+    .sort((a, b) => a - b)[0];
+  if (firstSetMs !== undefined) {
+    events.push({ atMs: firstSetMs, kind: "stop" });
+  } else if (timeline.resolvedAt) {
     events.push({ atMs: parseInstant(timeline.resolvedAt, "resolvedAt"), kind: "stop" });
   }
 

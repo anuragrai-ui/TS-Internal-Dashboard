@@ -122,6 +122,8 @@ export interface CaseListItem {
 
 /** Persisted in sync_state under SYNC_STATE_KEY; every field is optional on read (older shapes). */
 export interface CaseSyncState {
+  /* The SLA rules (src/lib/cases/sla.ts SLA_RULES_VERSION) the stored clocks were computed with; a change re-walks every ticket. */
+  slaRulesVersion?: number;
   backfill: {
     /* Last key fully processed, in key order; the next page starts after it. */
     afterKey: string | null;

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { getDb, redactDbError, sql } from "@/lib/db/client";
-import { computeFirstResponseClock, computeResolutionClock, firstAgentResponseAt, jiraReading } from "@/lib/cases/sla";
+import { computeFirstResponseClock, computeResolutionClock, firstAgentResponseAt, jiraReading, SLA_RULES_VERSION } from "@/lib/cases/sla";
 import {
   CERTIFY_SUPPORT_CALENDAR,
   PILOT_POD_OPTION_ID,
@@ -696,6 +696,19 @@ export function emptySyncState(): CaseSyncState {
   };
 }
 
+/**
+ * Stored clocks were computed with older SLA rules: restart the backfill so every ticket is rewritten with the current
+ * engine (writes are idempotent). The incremental cursor is kept, so new changes keep flowing meanwhile. Mutates state.
+ */
+export function rewalkIfSlaRulesChanged(state: CaseSyncState): boolean {
+  if ((state.slaRulesVersion ?? 1) === SLA_RULES_VERSION) {
+    return false;
+  }
+  state.backfill = { ...emptySyncState().backfill };
+  state.slaRulesVersion = SLA_RULES_VERSION;
+  return true;
+}
+
 /** A stored state merged over the defaults, so a missing or older-shaped value still reads. */
 export function normalizeSyncState(raw: unknown): CaseSyncState {
   const base = emptySyncState();
@@ -709,6 +722,7 @@ export function normalizeSyncState(raw: unknown): CaseSyncState {
     lastError: value.lastError ?? null,
     lastTick: value.lastTick ?? null,
     retry: Array.isArray(value.retry) ? value.retry : [],
+    ...(typeof value.slaRulesVersion === "number" ? { slaRulesVersion: value.slaRulesVersion } : {}),
   };
 }
 
@@ -1091,6 +1105,7 @@ export async function syncTick(opts: SyncTickOptions = {}, injected?: CaseSyncDe
     state = await loadSyncState(deps.db);
     ctx.state = state;
     loaded = true;
+    rewalkIfSlaRulesChanged(state);
 
     const retrying = state.retry.length > 0;
     await retryPhase(ctx);

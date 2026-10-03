@@ -11,12 +11,13 @@ import {
   mapEvents,
   mapLinks,
   normalizeSyncState,
+  rewalkIfSlaRulesChanged,
   runManualSync,
   SYNC_STATE_KEY,
   syncTick,
 } from "@/lib/cases/jiraSync";
 import { summarizeParity } from "@/lib/cases/read";
-import { computeFirstResponseClock, computeResolutionClock, firstAgentResponseAt, isPauseStatus, parityMismatch, runClock } from "@/lib/cases/sla";
+import { computeFirstResponseClock, computeResolutionClock, firstAgentResponseAt, isPauseStatus, parityMismatch, runClock, SLA_RULES_VERSION } from "@/lib/cases/sla";
 import { ensureMigrated, migrationTransaction, pendingMigrations, runMigrations, validateMigrations } from "@/lib/db/migrate";
 import { MIGRATIONS } from "@/lib/db/migrations";
 import { redactDbError } from "@/lib/db/client";
@@ -533,7 +534,19 @@ async function main(): Promise<void> {
         { at: "2026-10-05T13:00:00.000Z", set: false },
       ],
     });
-    assertEqual([reopened.state, reopened.elapsedBusinessMs, reopened.stoppedAt], ["running", 3 * HOUR, null], "reopen starts a new cycle");
+    assertEqual([reopened.state, reopened.elapsedBusinessMs, reopened.stoppedAt], ["met", 6 * HOUR, "2026-10-02T19:00:00.000Z"], "reopen does not start a new cycle");
+    const reResolved = resolution([], {
+      now: "2026-10-05T16:00:00.000Z",
+      resolutions: [
+        { at: "2026-10-02T19:00:00.000Z", set: true },
+        { at: "2026-10-05T13:00:00.000Z", set: false },
+        { at: "2026-10-05T15:00:00.000Z", set: true },
+      ],
+    });
+    assertEqual([reResolved.state, reResolved.stoppedAt], ["met", "2026-10-02T19:00:00.000Z"], "the first resolution is the one that counts");
+    const waitingOps = resolution([{ at: "2026-10-02T16:00:00.000Z", to: "10634", toName: "Waiting for operations" }], { now: "2026-10-05T16:00:00.000Z" });
+    assertEqual([waitingOps.state, waitingOps.elapsedBusinessMs], ["paused", 3 * HOUR], "waiting for operations pauses");
+    assert(isPauseStatus("10634", "renamed") && isPauseStatus("x", "Waiting for operations") && !isPauseStatus("12772", "Waiting for TS review"), "ops pauses, TS review runs");
     assertEqual(resolution([], { goal: null, now: "2026-10-05T16:00:00.000Z" }).state, "none", "no Jira goal -> none");
 
     /* DST: fall back (2026-11-01) and spring forward (2027-03-14) - local 09-18 holds. */
@@ -590,6 +603,100 @@ async function main(): Promise<void> {
     ]);
     assertEqual([parity.compared, parity.matched, parity.mismatched, parity.examples[0]?.jiraKey], [2, 1, 1, "TS-2"], "parity summary");
 
+    /* Production parity cases (2026-10-03): Jira's completed Time to resolution cycle vs ours, from
+       each ticket's real status/resolution timeline (keys and times only). Statuses are TS workflow ids. */
+    {
+      const STATUS_NAMES: Record<string, string> = {
+        "1": "To-do",
+        "3": "In Progress",
+        "4": "Reopened",
+        "10002": "Done",
+        "10045": "Waiting for client",
+        "10173": "Triaging",
+        "10259": "Ops Triaging",
+        "10633": "Waiting for product",
+        "10634": "Waiting for operations",
+        "12772": "Waiting for TS review",
+      };
+      interface JsmCase {
+        created: string;
+        goalH: number;
+        initial: string;
+        jiraBreached: boolean;
+        jiraElapsedMs: number;
+        key: string;
+        steps: Array<[string, string]>;
+        stop: string;
+      }
+      const jsmCases: JsmCase[] = [
+        /* Waiting for operations (10634) pauses: we counted ~4 months in it as business time. */
+        { key: "TS-79510", created: "2026-04-22T13:18:53.473Z", initial: "1", goalH: 72, jiraElapsedMs: 44456226, jiraBreached: false, stop: "2026-08-21T14:46:04.000Z",
+          steps: [["2026-04-23T16:39:47.283Z", "10173"], ["2026-04-23T16:39:49.699Z", "10634"], ["2026-05-12T11:24:53.422Z", "10045"], ["2026-05-12T11:24:57.530Z", "3"], ["2026-05-12T11:25:00.288Z", "10633"], ["2026-08-21T14:46:04.046Z", "resolved"], ["2026-08-21T14:46:04.046Z", "10002"]] },
+        { key: "TS-88080", created: "2026-06-01T14:41:37.948Z", initial: "1", goalH: 72, jiraElapsedMs: 26310165, jiraBreached: false, stop: "2026-09-11T12:07:21.000Z",
+          steps: [["2026-06-01T16:05:11.878Z", "10259"], ["2026-06-01T16:44:57.457Z", "3"], ["2026-06-02T12:30:30.741Z", "10633"], ["2026-08-26T16:52:24.653Z", "3"], ["2026-08-26T16:52:30.075Z", "10634"], ["2026-09-04T13:29:05.001Z", "3"], ["2026-09-04T13:29:07.692Z", "10634"], ["2026-09-11T12:07:21.692Z", "resolved"], ["2026-09-11T12:07:21.692Z", "10002"]] },
+        { key: "TS-93954", created: "2026-06-23T19:35:28.492Z", initial: "10259", goalH: 24, jiraElapsedMs: 35207974, jiraBreached: false, stop: "2026-09-04T13:26:43.000Z",
+          steps: [["2026-06-24T13:05:20.966Z", "1"], ["2026-06-24T19:58:10.552Z", "3"], ["2026-06-24T19:58:16.167Z", "10633"], ["2026-08-21T16:45:41.172Z", "3"], ["2026-08-21T17:09:36.936Z", "10045"], ["2026-08-26T14:14:45.724Z", "3"], ["2026-08-26T14:14:50.259Z", "10634"], ["2026-09-04T13:26:43.723Z", "resolved"], ["2026-09-04T13:26:43.723Z", "10002"]] },
+        /* ...and Waiting for TS review (12772) does NOT pause: Jira's 58.68h only adds up with it running. */
+        { key: "TS-103763", created: "2026-07-31T02:08:42.496Z", initial: "1", goalH: 72, jiraElapsedMs: 211245616, jiraBreached: false, stop: "2026-08-24T19:32:37.000Z",
+          steps: [["2026-07-31T17:06:10.045Z", "10173"], ["2026-07-31T17:06:12.751Z", "10633"], ["2026-08-04T13:27:12.582Z", "12772"], ["2026-08-05T12:19:22.382Z", "3"], ["2026-08-05T12:19:25.264Z", "10633"], ["2026-08-05T13:27:12.598Z", "12772"], ["2026-08-12T14:28:55.697Z", "3"], ["2026-08-12T14:28:58.045Z", "10634"], ["2026-08-24T19:32:37.279Z", "resolved"], ["2026-08-24T19:32:37.279Z", "10002"]] },
+        /* Reopen does not restart: Jira keeps the breached first cycle; we used to start a fresh one and say "met". */
+        { key: "TS-87339", created: "2026-05-27T20:58:46.328Z", initial: "1", goalH: 72, jiraElapsedMs: 526975580, jiraBreached: true, stop: "2026-08-24T19:38:40.000Z",
+          steps: [["2026-05-29T15:32:15.034Z", "3"], ["2026-05-29T15:32:17.658Z", "10633"], ["2026-05-29T15:32:22.008Z", "3"], ["2026-05-29T15:32:24.823Z", "10634"], ["2026-06-09T17:19:30.366Z", "3"], ["2026-06-11T16:11:18.087Z", "10633"], ["2026-07-09T10:27:14.730Z", "12772"], ["2026-07-20T13:45:53.305Z", "3"], ["2026-07-20T13:45:56.178Z", "10633"], ["2026-07-23T17:27:12.368Z", "12772"], ["2026-07-23T19:30:54.454Z", "3"], ["2026-07-23T19:30:57.016Z", "10633"], ["2026-07-24T03:57:12.420Z", "12772"], ["2026-07-29T18:59:25.268Z", "3"], ["2026-07-29T18:59:45.796Z", "10633"], ["2026-08-12T10:57:16.022Z", "12772"], ["2026-08-12T13:10:46.868Z", "3"], ["2026-08-12T13:10:50.036Z", "10633"], ["2026-08-14T08:27:14.162Z", "12772"], ["2026-08-17T18:49:10.113Z", "3"], ["2026-08-17T18:49:12.416Z", "10633"], ["2026-08-18T07:27:17.323Z", "12772"], ["2026-08-18T16:07:58.292Z", "3"], ["2026-08-18T16:08:04.640Z", "10634"], ["2026-08-24T19:38:40.941Z", "resolved"], ["2026-08-24T19:38:40.941Z", "10002"], ["2026-09-03T10:09:23.898Z", "reopened"], ["2026-09-03T10:09:23.898Z", "4"], ["2026-09-03T11:25:55.088Z", "3"], ["2026-09-03T11:26:02.809Z", "resolved"], ["2026-09-03T11:26:02.809Z", "10002"]] },
+        /* Reopened and still open: Jira has only the completed first cycle, no ongoing one. */
+        { key: "TS-48700", created: "2025-11-24T14:29:53.789Z", initial: "1", goalH: 72, jiraElapsedMs: 82589436, jiraBreached: false, stop: "2025-12-05T14:46:41.000Z",
+          steps: [["2025-11-24T14:32:43.472Z", "3"], ["2025-11-26T19:26:23.225Z", "10634"], ["2025-12-05T14:46:41.888Z", "resolved"], ["2025-12-05T14:46:41.888Z", "10002"], ["2025-12-05T16:54:30.288Z", "reopened"], ["2025-12-05T16:54:30.288Z", "4"], ["2025-12-05T16:54:35.264Z", "3"], ["2025-12-09T18:17:52.468Z", "10633"], ["2026-08-19T12:50:14.589Z", "3"], ["2026-08-19T12:50:17.689Z", "10633"], ["2026-08-26T16:57:15.135Z", "12772"], ["2026-08-26T17:59:53.067Z", "3"], ["2026-08-26T17:59:55.883Z", "10633"], ["2026-08-28T13:27:11.568Z", "12772"], ["2026-08-31T16:45:13.842Z", "3"], ["2026-08-31T16:45:16.217Z", "10633"], ["2026-09-04T16:40:07.769Z", "3"], ["2026-09-04T16:40:11.181Z", "10633"]] },
+      ];
+      const jsmBundle = (c: JsmCase, calendar = CAL) => {
+        let current = c.initial;
+        let resolvedAt: string | null = null;
+        const histories: JiraHistory[] = c.steps.map(([when, to], index) => {
+          if (to === "resolved" || to === "reopened") {
+            resolvedAt = to === "resolved" ? when : null;
+            return { created: when, id: `${index}`, items: [{ field: "resolution", fieldId: "resolution", from: null, fromString: null, to: to === "resolved" ? "10000" : null, toString: to === "resolved" ? "Done" : null }] };
+          }
+          const from = current;
+          current = to;
+          return { created: when, id: `${index}`, items: [{ field: "status", fieldId: "status", from, fromString: STATUS_NAMES[from] ?? null, to, toString: STATUS_NAMES[to] ?? null }] };
+        });
+        const completedCycle = {
+          breached: c.jiraBreached,
+          elapsedTime: { millis: c.jiraElapsedMs },
+          goalDuration: { millis: c.goalH * HOUR },
+          remainingTime: { millis: c.goalH * HOUR - c.jiraElapsedMs },
+          startTime: { iso8601: c.created },
+          stopTime: { iso8601: c.stop },
+        };
+        return buildCaseBundle({
+          calendar,
+          comments: [],
+          histories,
+          issue: issue(c.key, {
+            created: c.created,
+            customfield_10650: { completedCycles: [completedCycle] },
+            resolutiondate: resolvedAt,
+            status: { id: current, name: STATUS_NAMES[current] ?? current, statusCategory: { key: current === "10002" ? "done" : "indeterminate" } },
+          }),
+          nowMs: at("2026-10-03T12:00:00.000Z"),
+        }).sla.find((clock) => clock.metric === "resolution");
+      };
+      for (const c of jsmCases) {
+        const ours = jsmBundle(c);
+        assert(ours !== undefined, `${c.key}: resolution clock`);
+        if (!ours) continue;
+        assertEqual(parityMismatch(ours, ours.jira), null, `${c.key}: parity with Jira's completed cycle`);
+        assertEqual(ours.stoppedAt?.slice(0, 19), c.stop.slice(0, 19), `${c.key}: stops at the first resolution`);
+        assertEqual(ours.state, c.jiraBreached ? "breached" : "met", `${c.key}: completed state`);
+        if (c.key !== "TS-48700") {
+          assert(Math.abs(ours.elapsedBusinessMs - c.jiraElapsedMs) < 60_000, `${c.key}: elapsed ${ours.elapsedBusinessMs} within a minute of Jira's ${c.jiraElapsedMs}`);
+        }
+      }
+      /* TS-48700 completed in Dec 2025, before the 2026 holidays were in the JSM calendar: Jira froze its
+         elapsed time without them (it counted Wed 2025-11-26, which our recurring "Thanksgiving 11-26"
+         skips). Same timeline, no holidays -> Jira's number to the second. Breach state is unaffected. */
+      const tsNoHolidays = jsmBundle(jsmCases.find((c) => c.key === "TS-48700") as JsmCase, { ...CAL, holidays: [] });
+      assert(tsNoHolidays !== undefined && Math.abs(tsNoHolidays.elapsedBusinessMs - 82589436) < 60_000, "TS-48700: Jira's frozen elapsed predates the holiday list");
+    }
+
     /* A full bundle carries both clocks with Jira's readings. */
     const bundle = buildCaseBundle({ comments: [], histories: [], issue: issue("TS-1"), nowMs: at("2026-10-05T16:00:00.000Z") });
     assertEqual(bundle.sla.map((s) => [s.metric, s.goalMs, s.jira.goalMs]), [["first_response", 4 * HOUR, 4 * HOUR], ["resolution", 45 * HOUR, 45 * HOUR]], "bundle clocks");
@@ -645,6 +752,21 @@ async function main(): Promise<void> {
     await ensureMigrated(memo, three);
     assertEqual(memo.log.filter((name) => name === "migrations.create_table").length, 1, "ensureMigrated runs once per executor");
     assert(MIGRATIONS[0]?.statements.every((s) => !s.includes("--")) === true, "no line comments in bundled SQL");
+  }
+
+  /* ------------------------------------------- SLA rules change re-walk */
+  {
+    const done: CaseSyncState = {
+      ...normalizeSyncState(null),
+      backfill: { afterKey: "TS-99999", completedAt: "2026-10-03T12:00:00.000Z", done: true, processed: 400, startedAt: "2026-10-03T11:00:00.000Z" },
+      incremental: { cursor: "2026-10-03T12:00:00.000Z", processed: 9 },
+    };
+    assert(rewalkIfSlaRulesChanged(done), "clocks from older rules (no version stored) trigger a re-walk");
+    assertEqual(done.backfill, { afterKey: null, completedAt: null, done: false, processed: 0, startedAt: null }, "the backfill restarts from the first key");
+    assertEqual(done.incremental.cursor, "2026-10-03T12:00:00.000Z", "the incremental cursor is kept");
+    assertEqual(done.slaRulesVersion, SLA_RULES_VERSION, "and the current rules are recorded");
+    assert(!rewalkIfSlaRulesChanged(done), "nothing to redo once on the current rules");
+    assertEqual(normalizeSyncState(JSON.parse(JSON.stringify(done))).slaRulesVersion, SLA_RULES_VERSION, "the version survives a save and load");
   }
 
   /* ------------------------------------------------------- redaction */

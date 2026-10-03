@@ -1,0 +1,821 @@
+/* oncall styles - see src/lib/workspace/types.ts. Uses the design tokens from app/globals.css. */
+
+/* =================================================================
+   On-call: header pill + popover (src/components/oncall/OnCallPill.tsx)
+   ================================================================= */
+
+.oc-pill-wrap {
+  position: relative;
+}
+
+.oc-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  block-size: 2rem;
+  max-inline-size: 22rem;
+  padding: 0 var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.oc-pill:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.oc-pill:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.oc-pill > svg {
+  flex-shrink: 0;
+  color: var(--warning);
+}
+
+.oc-pill[data-state="ok"] {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+.oc-pill[data-state="ok"]:hover {
+  border-color: var(--accent);
+}
+
+.oc-pill[data-state="error"] > svg {
+  color: var(--danger);
+}
+
+.oc-pill-label {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.oc-pill[data-state="ok"] .oc-pill-label {
+  color: var(--accent);
+}
+
+.oc-pill-names {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.oc-pill-setup {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--border-strong);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.oc-pill-setup > svg {
+  color: var(--text-subtle);
+}
+
+.oc-pill-setup .oc-pill-label {
+  font-weight: 500;
+}
+
+.oc-pill-setup:hover .oc-pill-label,
+.oc-pill-setup:hover > svg {
+  color: var(--accent);
+}
+
+.oc-pop {
+  position: absolute;
+  inset-block-start: calc(100% + var(--space-2));
+  inset-inline-end: 0;
+  z-index: 70;
+  inline-size: min(25rem, calc(100vw - 2rem));
+  max-block-size: min(34rem, calc(100vh - var(--header-height) - 2rem));
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.oc-pop:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-lg), var(--focus-ring);
+}
+
+.oc-pop-header,
+.oc-pop-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-sunken);
+}
+
+.oc-pop-header {
+  border-block-end: 1px solid var(--border);
+}
+
+.oc-pop-footer {
+  border-block-start: 1px solid var(--border);
+}
+
+.oc-pop-title {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.oc-pop-calendar {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+}
+
+.oc-pop-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: var(--space-3) var(--space-3) 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--warning-soft);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.oc-pop-error > svg {
+  flex-shrink: 0;
+  margin-block-start: 1px;
+  color: var(--warning);
+}
+
+.oc-pop-empty {
+  padding: var(--space-4) var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.oc-pop-regions {
+  display: flex;
+  flex-direction: column;
+}
+
+.oc-pop-region {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.oc-pop-region + .oc-pop-region {
+  border-block-start: 1px solid var(--border);
+}
+
+.oc-pop-region-name {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.oc-pop-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.oc-pop-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.oc-pop-time {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+/* =================================================================
+   Shared bits: tags, people, text buttons, chips, banners
+   ================================================================= */
+
+.oc-muted {
+  color: var(--text-muted);
+}
+
+.oc-tag {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 2px var(--space-2);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.oc-tag-now {
+  background: var(--success-soft);
+  border-color: transparent;
+  color: var(--success);
+}
+
+.oc-people {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  min-inline-size: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.oc-people[data-size="lg"] {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.oc-people-empty {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.oc-person {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.oc-person-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text);
+  text-decoration: none;
+  border-block-end: 1px dashed var(--border-strong);
+}
+
+.oc-person-link:hover {
+  color: var(--accent);
+  border-block-end-color: var(--accent);
+  text-decoration: none;
+}
+
+.oc-person-link > svg {
+  color: var(--text-subtle);
+}
+
+.oc-person-link:hover > svg {
+  color: var(--accent);
+}
+
+.oc-text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.oc-text-btn:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.oc-inline-link {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.oc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  background: var(--accent-soft);
+  border-radius: var(--radius-xs);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.oc-chip:hover {
+  background: var(--accent);
+  color: var(--accent-text);
+  text-decoration: none;
+}
+
+.oc-badge {
+  display: inline-flex;
+  padding: 1px var(--space-1);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  color: var(--text-subtle);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.oc-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-block-end: var(--space-3);
+  padding: var(--space-3);
+  background: var(--warning-soft);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.oc-banner > svg {
+  flex-shrink: 0;
+  margin-block-start: 2px;
+  color: var(--warning);
+}
+
+.oc-banner[data-tone="danger"] {
+  background: var(--danger-soft);
+}
+
+.oc-banner[data-tone="danger"] > svg {
+  color: var(--danger);
+}
+
+.oc-loading {
+  padding: var(--space-5) var(--space-4);
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+/* =================================================================
+   On-call page (src/components/oncall/OnCallBoard.tsx)
+   ================================================================= */
+
+.oc-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.oc-section {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.oc-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  margin-block-end: var(--space-3);
+}
+
+.oc-section-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.oc-section-title {
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.oc-section-meta {
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+/* Now cards */
+
+.oc-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--space-3);
+  margin-block-end: var(--space-5);
+}
+
+.oc-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  min-inline-size: 0;
+}
+
+.oc-card[data-active="true"] {
+  border-inline-start: 3px solid var(--success);
+}
+
+.oc-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.oc-card-region {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.oc-card-shift {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.oc-card-time {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.oc-card-title {
+  overflow: hidden;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oc-card-next {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border);
+}
+
+.oc-card-next-label {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.oc-card-next-shift {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--text-sm);
+}
+
+.oc-card-next-shift .oc-card-time {
+  font-size: var(--text-xs);
+}
+
+/* Agenda */
+
+.oc-agenda-heading {
+  margin-block-end: var(--space-3);
+}
+
+.oc-agenda {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.oc-agenda-day {
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.oc-agenda-date {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-sunken);
+  border-block-end: 1px solid var(--border);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.oc-agenda-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.oc-agenda-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.oc-agenda-item + .oc-agenda-item {
+  border-block-start: 1px solid var(--border);
+}
+
+.oc-agenda-item[data-state="ended"] {
+  opacity: 0.6;
+}
+
+.oc-agenda-item[data-state="now"] {
+  background: var(--success-soft);
+}
+
+.oc-region-chip {
+  flex-shrink: 0;
+  min-inline-size: 5.5rem;
+  padding: 2px var(--space-2);
+  background: var(--accent-soft);
+  border-radius: var(--radius-xs);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-align: center;
+}
+
+.oc-agenda-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+  font-size: var(--text-sm);
+}
+
+.oc-agenda-time {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+/* Setup */
+
+.oc-setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.oc-setup-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.oc-setup-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.oc-setup-steps code,
+.oc-setup-note code {
+  padding: 1px var(--space-1);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+.oc-setup-note {
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+/* #firefighters feed */
+
+.oc-feed-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.oc-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.oc-toggle input {
+  inline-size: 1rem;
+  block-size: 1rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.oc-feed {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.oc-msg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  min-inline-size: 0;
+}
+
+.oc-msg + .oc-msg {
+  border-block-start: 1px solid var(--border);
+}
+
+.oc-msg[data-bot="true"] {
+  background: var(--surface-sunken);
+}
+
+.oc-msg-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.oc-msg-author {
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.oc-msg-time {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.oc-msg-text {
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.oc-msg-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-start: var(--space-1);
+}
+
+.oc-msg-replies {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.oc-msg-open {
+  margin-inline-start: auto;
+}
+
+.oc-feed-note {
+  margin-block: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+/* =================================================================
+   Narrow screens
+   ================================================================= */
+
+@media (max-width: 1100px) {
+  .oc-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .oc-pill {
+    max-inline-size: 9.5rem;
+    padding: 0 var(--space-2);
+  }
+
+  .oc-pill-label {
+    display: none;
+  }
+
+  .oc-pill-setup .oc-pill-label {
+    display: inline;
+  }
+
+  .oc-pill-setup {
+    max-inline-size: none;
+  }
+
+  .oc-agenda-item {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .oc-region-chip {
+    min-inline-size: 0;
+  }
+
+  .oc-agenda-body {
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  .oc-setup {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .oc-msg-open {
+    margin-inline-start: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  /* The header is tight on a phone: the setup link shrinks to its icon (it keeps its accessible title). */
+  .oc-pill-setup .oc-pill-label {
+    display: none;
+  }
+
+  .oc-pill-setup {
+    padding: 0 var(--space-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oc-pill {
+    transition: none;
+  }
+}

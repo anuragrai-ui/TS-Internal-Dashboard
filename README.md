@@ -488,6 +488,25 @@ npm run test:tracker-slack
 npm run test:tracker-views
 ```
 
+## Support Workspace (phase 1)
+
+The goal is one place where TS works instead of switching between Jira and Slack, with AI agents doing the legwork. Phase 1 keeps Jira and Slack as the systems of record and works on top of them; the shared contract is `src/lib/workspace/types.ts`.
+
+**On-call (`/oncall`, header pill):** who is firefighter now and next (Asia/Europe and US), read from the shared Google Calendar's secret iCal address in `ONCALL_CALENDAR_ICAL_URL` (Production, Sensitive - never logged). Recurring events, overrides, EXDATEs, time zones and DST are handled in `src/lib/oncall/ical.ts`; people come from attendees or the event title and are matched to Slack users by name. The page also shows the #firefighters channel (`FIREFIGHTER_SLACK_CHANNEL`, default `C06LMNLJY82`) - invite the bot there.
+
+**Acting from the tracker:** the detail panel has an action bar (status, assignee, priority, link CP, escalate to firefighters) and a composer (reply to customer, internal note, reply in a linked Slack thread, post in #firefighters). Every write goes through `src/lib/actions/service.ts`: validation, a per-person idempotency key (a resend never writes twice), a check that the ticket hasn't changed since you loaded it, 60 writes/hour per person, a leak check on anything customer-visible (other ticket keys, wiki, Slack and dashboard links), an audit log, and "uncertain" (not retried) when Jira/Slack may or may not have done it. Jira writes use **your own registered Jira token** - never the shared service account. Slack posts go out as the bot, attributed to you, only into conversations linked to the ticket or into #firefighters, and follow Slack test mode (`SLACK_TEST_CHANNEL`).
+
+**Assist agent:** each ticket gets a short summary (`ANTHROPIC_FAST_MODEL`, default Claude Haiku 4.5) and an Investigate button (`ANTHROPIC_AGENT_MODEL`, default Claude Sonnet 5.5) that reads the ticket, its Slack threads, linked CPs, similar tickets and Confluence with read-only tools, and returns facts with sources, hypotheses (marked as such), missing information, a customer-safe draft and proposed actions. The agent never writes: its actions arrive as proposals a person approves, edits or rejects. Text from Jira/Slack is treated as untrusted data.
+
+**Browser agent tools (WebMCP):** on `/tracker`, browsers that support `document.modelContext` get page tools (search_cases, open_case, get_case_context, get_oncall, start_investigation, get_investigation, prepare_reply, propose_action). They call the same APIs as the UI and can only fill the composer or create proposals - a person still presses Send or Approve.
+
+```bash
+npm run test:actions
+npm run test:assist
+npm run test:oncall
+npm run test:webmcp
+```
+
 ## UI Design & Theming
 
 The interface is a Kibana/Jira-inspired enterprise operations console, not a marketing-style admin template:

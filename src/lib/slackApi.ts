@@ -246,7 +246,8 @@ export type SlackReadMethod =
   | "conversations.info"
   | "conversations.replies"
   | "users.conversations"
-  | "users.info";
+  | "users.info"
+  | "users.list";
 
 export interface SlackReadResult<T> {
   data: T | null;

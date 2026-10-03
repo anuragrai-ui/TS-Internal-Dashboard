@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { Icon } from "@/components/Icon";
 import { NotificationBell } from "@/components/NotificationBell";
+import { OnCallPill } from "@/components/oncall/OnCallPill";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const CATEGORY_TITLES: Record<string, string> = {
@@ -22,6 +23,7 @@ const SECTION_TITLES: Record<string, string> = {
   escalations: "Escalation bot",
   history: "History",
   notifications: "Notifications",
+  oncall: "On-call & firefighters",
   "sheet-followups": "Sheet AI Follow-Ups",
   "sla-followups": "SLA Follow-Ups",
   tracker: "Escalation tracker",
@@ -121,6 +123,8 @@ export function TopHeader({ jiraBaseUrl, onMenuClick, userDisplayName }: TopHead
       </div>
 
       <div className="header-actions">
+        {/* The on-call API refuses unidentified browsers, so the pill (like the bell) waits for an identity. */}
+        {userDisplayName ? <OnCallPill /> : null}
         {/* Notifications are per person, so the bell only exists once this browser is identified. */}
         {userDisplayName ? <NotificationBell /> : null}
         <Link aria-label="Refresh Jira data" className="header-icon-btn" href="/refresh">
